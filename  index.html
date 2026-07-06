@@ -1,0 +1,3457 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Burkina Ambiance — Gestion Bar</title>
+<meta name="theme-color" content="#0d0f14">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script crossorigin src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script crossorigin src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script crossorigin src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d0f14; --bg2:#151822; --bg3:#1c202c;
+    --gold:#d4af37; --gold-dim:#8a7328;
+    --text:#eee8da; --text-dim:#9aa0ad;
+    --green:#3fae6a; --red:#c94f4f; --blue:#4a90d9;
+    --border:#2a2f3d;
+    --radius:10px;
+  }
+  /* Thème clair : fond blanc/gris clair, texte sombre, accent doré assombri pour le contraste */
+  html[data-theme="clair"]{
+    --bg:#f4f2ee; --bg2:#ffffff; --bg3:#eceae4;
+    --gold:#a9791f; --gold-dim:#c9a54a;
+    --text:#1b1c1f; --text-dim:#5b5f6a;
+    --green:#1f8a4c; --red:#c23b3b; --blue:#2e6fbf;
+    --border:#d9d5cc;
+  }
+  /* Thème néon sombre : noir profond, accents fluo (cyan/magenta), effet lumineux */
+  html[data-theme="neon"]{
+    --bg:#05050a; --bg2:#0b0b16; --bg3:#12121f;
+    --gold:#00f0ff; --gold-dim:#0a8b96;
+    --text:#eafcff; --text-dim:#7a8a9a;
+    --green:#39ff8f; --red:#ff3b6f; --blue:#5ad1ff;
+    --border:#1f2a3a;
+  }
+  html[data-theme="neon"] .brand h1, html[data-theme="neon"] .card h3, html[data-theme="neon"] .topbar .who b{
+    text-shadow:0 0 6px var(--gold), 0 0 14px var(--gold-dim);
+  }
+  html[data-theme="neon"] .btn:not(.secondary):not(.danger){
+    box-shadow:0 0 10px var(--gold-dim);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif; overscroll-behavior:none;}
+  #root{min-height:100vh; display:flex; flex-direction:column;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  /* ---------- Login ---------- */
+  .login-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:18px;}
+  .brand{text-align:center;}
+  .brand h1{margin:0; font-size:26px; letter-spacing:2px; color:var(--gold); font-weight:700;}
+  .brand p{margin:4px 0 0; color:var(--text-dim); font-size:13px; letter-spacing:1px;}
+  .pin-dots{display:flex; gap:14px; margin:10px 0;}
+  .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--gold-dim); transition:.15s;}
+  .pin-dot.filled{background:var(--gold); border-color:var(--gold);}
+  .keypad{display:grid; grid-template-columns:repeat(3,72px); gap:14px;}
+  .key{width:72px;height:72px;border-radius:50%; background:var(--bg3); border:1px solid var(--border);
+    color:var(--text); font-size:22px; display:flex; align-items:center; justify-content:center;}
+  .key:active{background:var(--gold-dim); color:#000;}
+  .key.wide{font-size:14px;}
+  .login-error{color:var(--red); font-size:13px; min-height:18px;}
+
+  /* ---------- Shell ---------- */
+  .topbar{display:flex; align-items:center; justify-content:space-between; padding:12px 16px;
+    background:var(--bg2); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:20;}
+  .topbar .who{display:flex; flex-direction:column;}
+  .topbar .who b{color:var(--gold); font-size:15px;}
+  .topbar .who span{font-size:11px; color:var(--text-dim);}
+  .icon-btn{background:none;border:none;color:var(--text-dim); font-size:20px; padding:6px;}
+  .content{flex:1; overflow-y:auto; padding:12px 12px 90px;}
+  .tabbar{position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--bg2);
+    border-top:1px solid var(--border); z-index:20; padding-bottom:env(safe-area-inset-bottom);}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 2px 7px;
+    background:none; border:none; color:var(--text-dim); font-size:10px;}
+  .tab.active{color:var(--gold);}
+  .tab .ic{font-size:19px;}
+
+  /* ---------- Cards / generic ---------- */
+  .card{background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:12px;}
+  .card h3{margin:0 0 10px; font-size:14px; color:var(--gold); letter-spacing:.5px; text-transform:uppercase;}
+  .row{display:flex; gap:8px; align-items:center;}
+  .row.between{justify-content:space-between;}
+  .field{margin-bottom:10px;}
+  .field label{display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;}
+  .field input, .field select{width:100%; padding:10px; background:var(--bg3); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-size:15px;}
+  .btn{padding:11px 16px; border-radius:8px; border:none; font-size:14px; font-weight:600; color:#0d0f14;
+    background:var(--gold); width:100%;}
+  .btn.secondary{background:var(--bg3); color:var(--text); border:1px solid var(--border);}
+  .btn.danger{background:var(--red); color:#fff;}
+  .btn.sm{width:auto; padding:8px 12px; font-size:12px;}
+  .pill{display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600;}
+  .pill.owner{background:#3a2f10; color:var(--gold);}
+  .pill.gerant{background:#123a2a; color:var(--green);}
+  .pill.caissier{background:#132a3a; color:var(--blue);}
+  .pill.ok{background:#123a2a; color:var(--green);}
+  .pill.danger{background:#3a1414; color:var(--red);}
+  .empty{text-align:center; color:var(--text-dim); font-size:13px; padding:30px 10px;}
+  .zone-toggle{display:flex; background:var(--bg3); border-radius:8px; padding:3px; margin-bottom:12px;}
+  .zone-toggle button{flex:1; padding:8px; border:none; background:none; border-radius:6px; color:var(--text-dim); font-size:13px; font-weight:600;}
+  .zone-toggle button.active{background:var(--gold); color:#0d0f14;}
+
+  /* ---------- Table stock ---------- */
+  table.stock{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.stock th{background:var(--bg3); color:var(--gold); padding:6px 4px; font-size:10.5px; text-transform:uppercase; position:sticky; top:0;}
+  table.stock td{padding:5px 4px; border-bottom:1px solid var(--border); text-align:center;}
+  table.stock td.name{text-align:left; color:var(--text);}
+  table.stock input{width:52px; padding:5px; background:var(--bg3); border:1px solid var(--border); border-radius:5px; color:var(--text); text-align:center; font-size:12.5px;}
+  table.stock tfoot td{font-weight:700; color:var(--gold); background:var(--bg3);}
+
+  /* ---------- Ticket / print ---------- */
+  .ticket{background:#fff; color:#000; width:280px; margin:0 auto; padding:14px; font-family:'Courier New',monospace; font-size:12px;}
+  .ticket h4{text-align:center; margin:0 0 4px; font-size:14px;}
+  .ticket .center{text-align:center;}
+  .ticket hr{border:none; border-top:1px dashed #000; margin:8px 0;}
+  .ticket .line{display:flex; justify-content:space-between; gap:8px;}
+  .ticket .line span:first-child{flex-shrink:0;}
+  .ticket .line span:last-child{text-align:right; word-break:break-word; overflow-wrap:anywhere;}
+  .ticket .ticket-total{font-size:16px; font-weight:900; border-top:1px dashed #000; border-bottom:1px dashed #000; padding:4px 0; margin:4px 0;}
+  @media print{
+    body *{visibility:hidden;}
+    .ticket, .ticket *{visibility:visible;}
+    .ticket{position:absolute; top:0; left:0; width:100%;}
+  }
+
+  .journee-badge{background:var(--bg3); border:1px solid var(--gold-dim); color:var(--gold);
+    padding:6px 12px; border-radius:20px; font-size:12px; display:inline-flex; align-items:center; gap:6px; margin-bottom:12px;}
+
+  .search-bar{display:flex; gap:8px; margin-bottom:10px;}
+  .search-bar input{flex:1; padding:10px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text);}
+
+  .list-item{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
+  .list-item:last-child{border-bottom:none;}
+  .list-item .meta{font-size:11px; color:var(--text-dim);}
+  .badge-sync{font-size:10px; padding:1px 7px; border-radius:10px;}
+  .badge-sync.on{background:#123a2a; color:var(--green);}
+  .badge-sync.off{background:#3a1212; color:var(--red);}
+
+  /* ---------- POS tactile ---------- */
+  .pos-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:140px;}
+  .pos-tile{position:relative; background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+    padding:16px 10px; display:flex; flex-direction:column; align-items:center; gap:6px; min-height:82px;
+    color:var(--text); text-align:center;}
+  .pos-tile:active{transform:scale(.97);}
+  .pos-tile.active{border-color:var(--gold); background:#241f10;}
+  .pos-tile .pos-nom{font-size:13px; font-weight:600; line-height:1.2;}
+  .pos-tile .pos-prix{font-size:12px; color:var(--gold);}
+  .pos-tile .pos-qte{position:absolute; top:-8px; right:-8px; background:var(--gold); color:#0d0f14;
+    width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:800;}
+  .panier-bar{position:fixed; left:0; right:0; bottom:56px; background:var(--bg2); border-top:1px solid var(--gold-dim);
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom)); z-index:15; box-shadow:0 -6px 18px #0008;}
+  .panier-lignes{max-height:110px; overflow-y:auto; margin-bottom:8px;}
+  .panier-ligne{display:flex; justify-content:space-between; align-items:center; font-size:12.5px; padding:3px 0;}
+  .mini-btn{width:24px;height:24px;border-radius:50%; border:1px solid var(--border); background:var(--bg3); color:var(--text); font-size:14px; line-height:1;}
+  .panier-total{font-size:15px; margin-bottom:8px; padding-top:6px; border-top:1px dashed var(--border);}
+
+  /* ---------- Barre imprimante / connexion ---------- */
+  .printer-bar{display:flex; align-items:center; justify-content:space-between; background:var(--bg2);
+    border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin-bottom:10px; font-size:12px;}
+  .printer-bar .status-off{color:var(--red);}
+  .printer-bar .status-on{color:var(--green);}
+  .printer-toggle{display:flex; gap:6px; margin-bottom:12px;}
+  .printer-toggle button{flex:1; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg3); color:var(--text-dim); font-size:12px;}
+  .printer-toggle button.active{border-color:var(--gold); color:var(--gold); background:#241f10;}
+
+  /* ---------- Panier plein écran ---------- */
+  .cart-sheet{position:fixed; inset:0; background:var(--bg); z-index:40; display:flex; flex-direction:column;}
+  .cart-header{display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+    border-bottom:1px solid var(--border);}
+  .cart-header h2{margin:0; font-size:17px; color:var(--gold);}
+  .cart-body{flex:1; overflow-y:auto; padding:12px 16px;}
+  .cart-item{background:var(--bg2); border-radius:10px; padding:10px 12px; margin-bottom:8px;}
+  .cart-item .row.between{margin-bottom:6px;}
+  .cart-item .qte-ctrl{display:flex; align-items:center; gap:10px;}
+  .cart-item .qte-ctrl button{width:28px;height:28px;border-radius:50%; border:1px solid var(--border); background:var(--bg3); color:var(--text);}
+  .discount-chips{display:flex; gap:8px; margin:10px 0; flex-wrap:wrap;}
+  .discount-chips button{padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:var(--bg3); color:var(--text-dim); font-size:12.5px;}
+  .discount-chips button.active{background:var(--gold); color:#0d0f14; border-color:var(--gold);}
+  .cart-footer{border-top:1px solid var(--border); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--bg2);}
+  .cart-total-row{display:flex; justify-content:space-between; align-items:center; font-size:20px; font-weight:700; margin-bottom:10px;}
+  .cart-total-row .gold{color:var(--gold);}
+  .monnaie-box{background:var(--bg3); border-radius:8px; padding:10px; margin-bottom:10px;}
+  .btn.ble{background:var(--green); color:#fff;}
+  .btn.credit{background:#c9822f; color:#fff;}
+
+  /* ---------- KPI Dashboard ---------- */
+  .kpi-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;}
+  .kpi-card{background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px; display:flex; flex-direction:column; gap:4px;}
+  .kpi-label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-size:19px; font-weight:700; color:var(--gold);}
+  .kpi-sub{font-size:11px; color:var(--text-dim);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useMemo,useCallback,useRef} = React;
+
+/* =====================================================================
+   CONFIGURATION FIREBASE — remplace par les identifiants du projet
+   ===================================================================== */
+// Identifiants Firebase encodés en Base64 (évite qu'ils traînent en clair dans le code source)
+const FIREBASE_CONFIG_B64 = "eyJhcGlLZXkiOiAiQUl6YVN5QWxYOFdJR0RaVkpzT3M2VWZBUEFaTk00NGk4cmo2Zm93IiwgImF1dGhEb21haW4iOiAiZGlnaXRhLTdlODdlLmZpcmViYXNlYXBwLmNvbSIsICJwcm9qZWN0SWQiOiAiZGlnaXRhLTdlODdlIiwgInN0b3JhZ2VCdWNrZXQiOiAiZGlnaXRhLTdlODdlLmZpcmViYXNlc3RvcmFnZS5hcHAiLCAibWVzc2FnaW5nU2VuZGVySWQiOiAiMjQwNDM5MTQ5MjU2IiwgImFwcElkIjogIjE6MjQwNDM5MTQ5MjU2OndlYjphNzAxNGQyNDQ2NDdhYWE4ZThkYmZkIiwgIm1lYXN1cmVtZW50SWQiOiAiRy1QMTIzRVNWSzBRIn0=";
+const firebaseConfig = JSON.parse(atob(FIREBASE_CONFIG_B64));
+
+let db = null;
+let firebaseOK = false;
+try{
+  if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  firebaseOK = true;
+}catch(e){ console.warn("Firebase non initialisé :", e); }
+
+/* =====================================================================
+   MULTI-TENANT — chaque bar (client) est isolé sous shops/{shopId}/...
+   CURRENT_SHOP_ID est fixé une fois au démarrage (après l'écran de
+   configuration du bar) puis utilisé par toutes les collections Firestore.
+   ===================================================================== */
+let CURRENT_SHOP_ID = null;
+function setShopIdActif(id){ CURRENT_SHOP_ID = id; }
+function shopDocRef(){ return db.collection("shops").doc(CURRENT_SHOP_ID); }
+function shopCol(nom){ return shopDocRef().collection(nom); }
+function genererShopId(){
+  return "bar-" + Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4);
+}
+const DEV_PANEL_PIN = "761278"; // code d'accès développeur (panneau SaaS)
+
+/* =====================================================================
+   UTILITAIRES
+   ===================================================================== */
+// Clé locale scindée par bar (shopId) : chaque bar a ses propres données hors-ligne,
+// même si plusieurs bars sont testés sur le même appareil/navigateur.
+function getLSKey(){ return "burkina_ambiance_v1_" + (CURRENT_SHOP_ID || "sans_bar"); }
+const DEVICE_SHOP_KEY = "burkina_device_shop_id"; // référence locale : quel bar cet appareil utilise
+
+function loadLS(){
+  try{ return JSON.parse(localStorage.getItem(getLSKey())) || {}; }catch(e){ return {}; }
+}
+function saveLS(data){
+  try{ localStorage.setItem(getLSKey(), JSON.stringify(data)); }catch(e){}
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function fmtFCFA(n){
+  n = Math.round(Number(n)||0);
+  const neg = n < 0;
+  const chiffres = Math.abs(n).toString();
+  let groupe = "";
+  for(let i=0;i<chiffres.length;i++){
+    if(i>0 && (chiffres.length-i)%3===0) groupe += " "; // espace ASCII simple, sûr pour toute imprimante
+    groupe += chiffres[i];
+  }
+  return (neg?"-":"") + groupe + " F";
+}
+
+async function hashPin(pin){
+  const enc = new TextEncoder().encode("burkina-salt-" + pin);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* Calcule la "journée comptable" (YYYY-MM-DD) en fonction de l'heure d'arrêt.
+   Ex : heureArret = 2 -> tout ce qui se passe entre 00h00 et 01h59 appartient
+   encore à la journée comptable de la veille. */
+function journeeComptable(date, heureArret){
+  const d = new Date(date);
+  if(d.getHours() < heureArret){
+    d.setDate(d.getDate()-1);
+  }
+  return d.toISOString().slice(0,10);
+}
+
+function formatDateFR(iso){
+  const d = new Date(iso+"T00:00:00");
+  return d.toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+
+/* Renvoie {debut, fin} (YYYY-MM-DD, lundi à dimanche) de la semaine calendaire
+   contenant la date "journee" donnée. */
+function semaineDe(journee){
+  const d = new Date(journee+"T00:00:00");
+  const jour = d.getDay(); // 0=dimanche
+  const decalageLundi = jour===0 ? -6 : 1-jour;
+  const lundi = new Date(d); lundi.setDate(d.getDate()+decalageLundi);
+  const dimanche = new Date(lundi); dimanche.setDate(lundi.getDate()+6);
+  return { debut: lundi.toISOString().slice(0,10), fin: dimanche.toISOString().slice(0,10) };
+}
+
+function moisDe(journee){
+  return journee.slice(0,7); // "YYYY-MM"
+}
+
+/* Calcule CA et marge bénéficiaire pour un ensemble de ventes.
+   La marge utilise le prixAchat enregistré au moment de chaque vente (snapshot),
+   ce qui garde le calcul exact même si le prix d'achat change ensuite. */
+function calculerCAEtMarge(ventes){
+  let ca = 0, cout = 0;
+  ventes.forEach(v=>{
+    ca += v.total;
+    (v.items||[]).forEach(it=>{
+      const achat = it.prixAchat || 0;
+      cout += achat * it.qte;
+    });
+  });
+  return { ca, cout, marge: ca - cout };
+}
+
+/* Échappe une valeur pour l'insérer dans une cellule CSV (gère virgules, guillemets, retours ligne) */
+function csvEchapper(val){
+  const s = (val===null || val===undefined) ? "" : String(val);
+  if(/[",\n;]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+/* Génère un CSV des ventes (une ligne par article vendu) et déclenche le téléchargement.
+   Compatible Excel FR (séparateur point-virgule, BOM UTF-8 pour les accents). */
+function exporterVentesCSV(ventes, nomFichier){
+  const entetes = ["Date","Journée","Zone","Caissier","Produit","Quantité","Prix unitaire","Sous-total","Remise %","Total vente","Crédit","Client crédit","Téléphone client","Motif crédit","Payé","Client fidélité","Téléphone fidélité","Annulée","Raison annulation","Note"];
+  const lignes = [entetes.map(csvEchapper).join(";")];
+  ventes.forEach(v=>{
+    (v.items && v.items.length ? v.items : [{nom:"(vente sans article)", qte:"", prixUnitaire:""}]).forEach(it=>{
+      lignes.push([
+        v.date, v.journee, v.zone, v.caissierNom,
+        it.nom, it.qte, it.prixUnitaire,
+        v.sousTotal, v.remise||0, v.total,
+        v.credit?"Oui":"Non", v.clientCredit||"", v.clientTelephone||"", v.clientMotif||"", v.credit?(v.paye?"Oui":"Non"):"",
+        v.clientFideliteNom||"", v.clientFideliteTelephone||"",
+        v.annulee?"Oui":"Non", v.raisonAnnulation||"", v.note||""
+      ].map(csvEchapper).join(";"));
+    });
+  });
+  const csv = "\uFEFF" + lignes.join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nomFichier;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* Construit le texte du rapport journalier (recettes/dépenses/ventes) pour envoi WhatsApp. */
+function genererRapportTexte(journeeStr, state, settings){
+  const ventesJour = (state.ventes||[]).filter(v=>v.journee===journeeStr && !v.annulee);
+  const { ca, marge } = calculerCAEtMarge(ventesJour);
+  const nbAnnulees = (state.ventes||[]).filter(v=>v.journee===journeeStr && v.annulee).length;
+  const c = state.clotures[journeeStr] || {};
+  const totalRecette = (c.recetteTerrasse||0)+(c.recetteBar||0)+(c.recetteCave||0);
+  const totalDepense = (c.depenseTerrasse||0)+(c.depenseBar||0)+(c.depenseCave||0);
+  const totalVersement = (c.versementTerrasse||0)+(c.versementBar||0)+(c.versementCave||0);
+  const totalCredit = (c.creditHomme||0)+(c.creditFemme||0);
+  const nom = settings.nomEtablissement || "Burkina Ambiance";
+  return [
+    `*${nom}* — Rapport du ${formatDateFR(journeeStr)}`,
+    ``,
+    `🧾 Ventes : ${ventesJour.length} (${nbAnnulees} annulée(s))`,
+    `💰 Chiffre d'affaires : ${fmtFCFA(ca)}`,
+    `📈 Marge estimée : ${fmtFCFA(marge)}`,
+    ``,
+    `📥 Recettes déclarées : ${fmtFCFA(totalRecette)}`,
+    `📤 Dépenses : ${fmtFCFA(totalDepense)}`,
+    `🏦 Versements : ${fmtFCFA(totalVersement)}`,
+    `💳 Crédits clients (H/F) : ${fmtFCFA(totalCredit)}`,
+    ``,
+    c.cloture ? `✅ Clôturé par ${c.cloturePar}` : `⚠️ Journée non clôturée`,
+  ].join("\n");
+}
+
+/* Ouvre WhatsApp (app ou web) avec le rapport pré-rempli vers le numéro configuré.
+   Nécessite une confirmation manuelle d'envoi dans WhatsApp (aucune API d'envoi automatique). */
+function envoyerRapportWhatsApp(numero, texte){
+  const num = (numero||"").replace(/[^\d]/g,"");
+  if(!num){ alert("Aucun numéro WhatsApp configuré (Réglages → Rapport journalier WhatsApp)."); return; }
+  const url = "https://wa.me/" + num + "?text=" + encodeURIComponent(texte);
+  window.open(url, "_blank");
+}
+
+/* Bip sonore court d'alerte (stock bas, etc.) — généré directement, sans fichier audio externe. */
+function biperAlerte(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine"; osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime+0.25);
+  }catch(e){ /* silencieux si non supporté */ }
+  if(navigator.vibrate) navigator.vibrate(120);
+}
+
+/* File d'attente d'écriture offline-first : on écrit tout de suite en local,
+   puis on tente Firestore en fire-and-forget (comme sur Caisse Pro). */
+function queueWrite(collection, id, payload){
+  setTimeout(()=>{
+    if(!firebaseOK || !CURRENT_SHOP_ID) return;
+    shopCol(collection).doc(id).set(payload, {merge:true}).catch(()=>{});
+  }, 0);
+}
+function queueDelete(collection, id){
+  setTimeout(()=>{
+    if(!firebaseOK || !CURRENT_SHOP_ID) return;
+    shopCol(collection).doc(id).delete().catch(()=>{});
+  }, 0);
+}
+
+/* =====================================================================
+   IMPRESSION THERMIQUE BLUETOOTH (ESC/POS)
+   Compatible avec la plupart des mini-imprimantes BLE 58/80mm vendues
+   en Afrique de l'Ouest (protocole ESC/POS générique).
+   ===================================================================== */
+const BLE_SERVICE_UUID = "000018f0-0000-1000-8000-00805f9b34fb";
+const BLE_CHAR_UUID = "00002af1-0000-1000-8000-00805f9b34fb";
+let blePrinterRef = { device:null, characteristic:null };
+
+async function connecterImprimanteBLE(){
+  if(!navigator.bluetooth){
+    alert("Le Bluetooth n'est pas disponible dans ce navigateur. Utilise Chrome sur Android.");
+    return false;
+  }
+  try{
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [BLE_SERVICE_UUID, "49535343-fe7d-4ae5-8fa9-9fafd205e455"]
+    });
+    const server = await device.gatt.connect();
+    let characteristic = null;
+    try{
+      const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+      characteristic = await service.getCharacteristic(BLE_CHAR_UUID);
+    }catch(e){
+      // Repli sur le service générique utilisé par d'autres imprimantes BLE courantes
+      const service = await server.getPrimaryService("49535343-fe7d-4ae5-8fa9-9fafd205e455");
+      characteristic = await service.getCharacteristic("49535343-8841-43f4-a8d4-ecbe34729bb3");
+    }
+    blePrinterRef = { device, characteristic };
+    device.addEventListener('gattserverdisconnected', ()=>{ blePrinterRef = {device:null, characteristic:null}; });
+    return true;
+  }catch(e){
+    console.error(e);
+    alert("Connexion imprimante impossible : " + e.message);
+    return false;
+  }
+}
+
+/* Corrige le bug des « écritures cassées » sur les reçus thermiques.
+   Les mini-imprimantes ESC/POS attendent un encodage mono-octet (CP437/850/1252),
+   pas de l'UTF-8. Un caractère accentué (É, È, Ç, °, œ...) encodé en UTF-8
+   devient alors 2 octets illisibles à l'impression — d'où les caractères cassés,
+   surtout visibles sur le reçu d'avoir ("REÇU D'AVOIR", "Établissement", "N°").
+   On translittère donc vers de l'ASCII pur avant impression thermique
+   (l'écran et l'impression navigateur, eux, gardent les accents normalement). */
+function translittererPourImprimante(str){
+  return String(str==null ? "" : str)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/œ/g,'oe').replace(/Œ/g,'OE')
+    .replace(/æ/g,'ae').replace(/Æ/g,'AE')
+    .replace(/ß/g,'ss')
+    .replace(/°/g,'deg')
+    .replace(/[’‘]/g,"'").replace(/[“”]/g,'"')
+    .replace(/[–—]/g,'-')
+    .replace(/[^\x00-\x7F]/g,'?'); // filet de sécurité pour tout caractère non ASCII restant
+}
+
+function construireTicketEscPos(lignesTexte, largeurMM){
+  const cols = largeurMM===80 ? 48 : 32;
+  const ESC=0x1B, GS=0x1D;
+  const enc = new TextEncoder();
+  let buf = [];
+  const push = a => buf.push(...a);
+  const text = t => push(Array.from(enc.encode(translittererPourImprimante(t).slice(0,300))));
+  const feed = (n=1) => { for(let i=0;i<n;i++) push([0x0A]); };
+
+  push([ESC,0x40]); // init
+  lignesTexte.forEach(l=>{
+    if(l.center) push([ESC,0x61,0x01]); else push([ESC,0x61,0x00]);
+    if(l.bold) push([ESC,0x45,1]); else push([ESC,0x45,0]);
+    if(l.big) push([GS,0x21,0x11]); else push([GS,0x21,0x00]);
+    if(l.dashes) text("-".repeat(cols));
+    else if(l.split){
+      const g = translittererPourImprimante(l.split[0]), d = translittererPourImprimante(l.split[1]);
+      const colsEffectif = l.big ? Math.floor(cols/2) : cols;
+      const espace = Math.max(1, colsEffectif - g.length - d.length);
+      text(g + " ".repeat(espace) + d);
+    } else text(l.text || "");
+    feed(1);
+  });
+  push([GS,0x21,0x00]); push([ESC,0x45,0]);
+  feed(3);
+  push([GS,0x56,0x41,0x00]); // coupe papier (si supportée)
+  return new Uint8Array(buf);
+}
+
+/* Convertit une image (dataURL) en bitmap monochrome pour impression ESC/POS.
+   80mm ≈ 576 points, 57/58mm ≈ 384 points (valeurs standard à ajuster selon
+   le modèle exact de l'imprimante si besoin). */
+function imageVersRasterEscPos(dataUrl, largeurDots){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const echelle = largeurDots / img.width;
+      const hauteur = Math.max(1, Math.round(img.height * echelle));
+      const canvas = document.createElement('canvas');
+      canvas.width = largeurDots; canvas.height = hauteur;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = "#fff"; ctx.fillRect(0,0,largeurDots,hauteur);
+      ctx.drawImage(img, 0, 0, largeurDots, hauteur);
+      const px = ctx.getImageData(0,0,largeurDots,hauteur).data;
+      const octetsParLigne = Math.ceil(largeurDots/8);
+      const bitmap = new Uint8Array(octetsParLigne*hauteur);
+      for(let y=0;y<hauteur;y++){
+        for(let x=0;x<largeurDots;x++){
+          const i = (y*largeurDots+x)*4;
+          const gris = (px[i]+px[i+1]+px[i+2])/3;
+          if(gris < 140) bitmap[y*octetsParLigne + (x>>3)] |= (0x80 >> (x&7));
+        }
+      }
+      resolve({bitmap, octetsParLigne, hauteur});
+    };
+    img.onerror = ()=>reject(new Error("Logo illisible"));
+    img.src = dataUrl;
+  });
+}
+
+function commandeRasterLogo({bitmap, octetsParLigne, hauteur}){
+  const GS = 0x1D;
+  const xL = octetsParLigne & 0xFF, xH = (octetsParLigne>>8) & 0xFF;
+  const yL = hauteur & 0xFF, yH = (hauteur>>8) & 0xFF;
+  return new Uint8Array([GS,0x76,0x30,0x00, xL,xH,yL,yH, ...bitmap]);
+}
+
+async function envoyerVersImprimante(data){
+  if(!blePrinterRef.characteristic){
+    alert("Aucune imprimante connectée. Appuie sur \"Connecter\" d'abord.");
+    return false;
+  }
+  const car = blePrinterRef.characteristic;
+  const supporteSansReponse = !car.properties || car.properties.writeWithoutResponse!==false;
+  const taillePaquet = 96;
+  try{
+    for(let i=0;i<data.length;i+=taillePaquet){
+      const chunk = data.slice(i, i+taillePaquet);
+      try{
+        if(supporteSansReponse) await car.writeValueWithoutResponse(chunk);
+        else await car.writeValue(chunk);
+      }catch(erreurEcriture){
+        // Repli : certaines imprimantes n'acceptent que writeValue (avec accusé de réception)
+        await car.writeValue(chunk);
+      }
+      await new Promise(r=>setTimeout(r, 12)); // évite de saturer le tampon de l'imprimante
+    }
+    return true;
+  }catch(e){
+    console.error(e);
+    alert("Erreur d'impression : " + e.message + "\n\nVérifie que l'imprimante est allumée et à portée, puis reconnecte-la.");
+    return false;
+  }
+}
+
+/* Fonction combinée : logo (si présent) + texte + coupe, répétée selon le
+   nombre de copies configuré dans les réglages. */
+async function imprimerTicketBLE(lignesTexte, largeurMM, settings){
+  if(!blePrinterRef.characteristic) return false;
+  const largeurDots = largeurMM===80 ? 576 : 384;
+  let logoBytes = null;
+  if(settings.logoDataUrl){
+    try{
+      const raster = await imageVersRasterEscPos(settings.logoDataUrl, largeurDots);
+      logoBytes = commandeRasterLogo(raster);
+    }catch(e){ console.warn("Logo non imprimé :", e.message); }
+  }
+  const texteBytes = construireTicketEscPos(lignesTexte, largeurMM);
+  const copies = Math.max(1, Number(settings.copiesTicket)||1);
+  let ok = true;
+  for(let c=0; c<copies; c++){
+    if(logoBytes) ok = await envoyerVersImprimante(logoBytes) && ok;
+    ok = await envoyerVersImprimante(texteBytes) && ok;
+  }
+  return ok;
+}
+
+function piedDeTicket(settings){
+  const lignes = (settings.piedTicket || "Merci de votre confiance !").split("\n").filter(Boolean).slice(0,3);
+  return lignes.length ? lignes : ["Merci de votre confiance !"];
+}
+
+function ticketLignesVente(data, settings){
+  const lignes = [
+    {text: settings.nomEtablissement || "BURKINA AMBIANCE", center:true, bold:true, big:true},
+  ];
+  if(settings.adresse) lignes.push({text: settings.adresse, center:true});
+  lignes.push({text: "TICKET DE VENTE", center:true});
+  lignes.push({dashes:true});
+  data.items.forEach(it=>{
+    lignes.push({split:[it.nom+" x"+it.qte, fmtFCFA(it.prixUnitaire*it.qte)]});
+  });
+  if(data.remise>0) lignes.push({split:["Remise "+data.remise+"%", "-"+fmtFCFA(data.montantRemise)]});
+  lignes.push({dashes:true});
+  lignes.push({split:["TOTAL", fmtFCFA(data.total)], bold:true, big:true});
+  if(data.montantRecu) lignes.push({split:["Reçu", fmtFCFA(data.montantRecu)]});
+  if(data.monnaie!=null) lignes.push({split:["Monnaie", fmtFCFA(data.monnaie)]});
+  lignes.push({dashes:true});
+  if(data.note && data.note.trim()){
+    lignes.push({text:"Note :", bold:true});
+    lignes.push({text:data.note.trim()});
+    lignes.push({dashes:true});
+  }
+  lignes.push({text:"Caissier : "+data.caissierNom});
+  lignes.push({text:data.date});
+  lignes.push({dashes:true});
+  piedDeTicket(settings).forEach(l=> lignes.push({text:l, center:true}));
+  return lignes;
+}
+
+function ticketLignesAvoir(data, settings){
+  const lignes = [
+    {text: settings.nomEtablissement || "BURKINA AMBIANCE", center:true, bold:true, big:true},
+  ];
+  if(settings.adresse) lignes.push({text: settings.adresse, center:true});
+  lignes.push({text: "REÇU D'AVOIR", center:true});
+  lignes.push({dashes:true});
+  lignes.push({split:["Établissement", data.etablissement]});
+  lignes.push({split:["Montant", fmtFCFA(data.montant)]});
+  lignes.push({split:["Caissier", data.caissierNom]});
+  lignes.push({split:["N°", data.numero]});
+  lignes.push({text: data.date});
+  lignes.push({dashes:true});
+  lignes.push({text:"Signature caissier : ______"});
+  piedDeTicket(settings).forEach(l=> lignes.push({text:l, center:true}));
+  return lignes;
+}
+
+/* =====================================================================
+   DONNEES PAR DEFAUT (produits issus du cahier de charge / photos)
+   ===================================================================== */
+const PRODUITS_DEFAUT = [
+  // zone terrasse
+  {nom:"Sobbcbra", zone:"terrasse", prix:900},
+  {nom:"Brakina", zone:"terrasse", prix:900},
+  {nom:"Doppel 50cl", zone:"terrasse", prix:900},
+  {nom:"Toquila", zone:"terrasse", prix:900},
+  {nom:"Guinesse 65 cl", zone:"terrasse", prix:900},
+  {nom:"Castel 65 cl", zone:"terrasse", prix:1600},
+  {nom:"Beaufort leger 65 c", zone:"terrasse", prix:1000},
+  {nom:"eau lafi 1,5", zone:"terrasse", prix:700},
+  {nom:"Sucrerie 50", zone:"terrasse", prix:700},
+  {nom:"Beaufort lager 50 c", zone:"terrasse", prix:900},
+  {nom:"Chile 50 cl", zone:"terrasse", prix:900},
+  {nom:"Racines", zone:"terrasse", prix:900},
+  // zone bar
+  {nom:"Brakina 33 cl", zone:"bar", prix:800},
+  {nom:"Beaufort 33 cl", zone:"bar", prix:1000},
+  {nom:"Doppel 33 cl", zone:"bar", prix:1000},
+  {nom:"Sucrerie petit", zone:"bar", prix:1000},
+  {nom:"XXL", zone:"bar", prix:1000},
+  {nom:"Castel 33 cl", zone:"bar", prix:1000},
+  {nom:"Guiness 33 cl", zone:"bar", prix:1200},
+  {nom:"Desperado", zone:"bar", prix:1200},
+  {nom:"Heineken", zone:"bar", prix:1200},
+  {nom:"Eau lafi 0,5", zone:"bar", prix:500},
+  {nom:"Doppel l'energie", zone:"bar", prix:1200},
+  {nom:"Smirnoff", zone:"bar", prix:1000},
+  {nom:"Malta", zone:"bar", prix:1000},
+  {nom:"Red bull", zone:"bar", prix:1000},
+  // liqueur
+  {nom:"Double black", zone:"liqueur", prix:42700},
+  {nom:"Johnny", zone:"liqueur", prix:22200},
+  {nom:"Chivas", zone:"liqueur", prix:22200},
+  {nom:"Belaire", zone:"liqueur", prix:30000},
+  {nom:"Moet", zone:"liqueur", prix:50000},
+  {nom:"JP Chenet", zone:"liqueur", prix:10000},
+  {nom:"Baileys", zone:"liqueur", prix:20000},
+  {nom:"Grants", zone:"liqueur", prix:18000},
+  {nom:"Jus", zone:"liqueur", prix:4000},
+  {nom:"Merlot", zone:"liqueur", prix:5000},
+  {nom:"Four special", zone:"liqueur", prix:5000},
+  {nom:"Caly canto", zone:"liqueur", prix:5000},
+  {nom:"Mouscador", zone:"liqueur", prix:7500},
+  {nom:"Jack daniel", zone:"liqueur", prix:32200},
+  {nom:"Agor", zone:"liqueur", prix:7000},
+  {nom:"Domaine", zone:"liqueur", prix:5000},
+];
+
+/* =====================================================================
+   COMPOSANT : PANIER PLEIN ECRAN (avec remise, monnaie, impression BLE)
+   ===================================================================== */
+function PanierSheet({lignes, onQte, onVider, onClose, onValider, currentUser, settings}){
+  const [remise,setRemise] = useState(0);
+  const [remisePerso,setRemisePerso] = useState("");
+  const [note,setNote] = useState("");
+  const [montantRecu,setMontantRecu] = useState("");
+  const [afficherMonnaie,setAfficherMonnaie] = useState(false);
+  const [connecte,setConnecte] = useState(!!blePrinterRef.characteristic);
+  const [largeurBLE,setLargeurBLE] = useState(80);
+  const [busy,setBusy] = useState(false);
+  const [afficherCredit,setAfficherCredit] = useState(false);
+  const [creditNom,setCreditNom] = useState("");
+  const [creditTelephone,setCreditTelephone] = useState("");
+  const [creditMotif,setCreditMotif] = useState("");
+  const [afficherFidelite,setAfficherFidelite] = useState(false);
+  const [fideliteNom,setFideliteNom] = useState("");
+  const [fideliteTelephone,setFideliteTelephone] = useState("");
+
+  const sousTotal = lignes.reduce((s,l)=>s+l.sousTotal,0);
+  const montantRemise = Math.round(sousTotal * remise/100);
+  const total = sousTotal - montantRemise;
+  const monnaie = montantRecu ? Number(montantRecu) - total : null;
+
+  const connecter = async ()=>{
+    setBusy(true);
+    const ok = await connecterImprimanteBLE();
+    setConnecte(ok);
+    setBusy(false);
+  };
+
+  const finaliser = async (avecImpression, aCredit)=>{
+    if(lignes.length===0) return;
+
+    // Vente à crédit : on affiche d'abord le formulaire (nom, téléphone, motif)
+    // avant de valider — nécessaire pour l'historique des créanciers.
+    if(aCredit && !afficherCredit){
+      setAfficherCredit(true);
+      return;
+    }
+    let clientCredit = null, clientTelephone = null, clientMotif = null;
+    if(aCredit){
+      if(!creditNom.trim() || !creditTelephone.trim()){
+        alert("Nom et numéro de téléphone du client sont obligatoires pour une vente à crédit.");
+        return;
+      }
+      clientCredit = creditNom.trim();
+      clientTelephone = creditTelephone.trim();
+      clientMotif = creditMotif.trim() || null;
+    }
+
+    setBusy(true);
+
+    let ok = true;
+    if(avecImpression){
+      let pret = connecte;
+      if(!pret){
+        pret = await connecterImprimanteBLE();
+        setConnecte(pret);
+      }
+      if(!pret){
+        setBusy(false);
+        return; // connecterImprimanteBLE affiche déjà une alerte d'erreur
+      }
+    }
+
+    const venteData = onValider({
+      remise, montantRemise, total, note, credit:aCredit, clientCredit, clientTelephone, clientMotif,
+      clientFideliteNom: !aCredit ? (fideliteNom.trim()||null) : null,
+      clientFideliteTelephone: !aCredit ? (fideliteTelephone.trim()||null) : null
+    });
+
+    if(avecImpression){
+      const lignesTicket = ticketLignesVente({
+        ...venteData, remise, montantRemise, total,
+        montantRecu: montantRecu?Number(montantRecu):null, monnaie
+      }, settings);
+      ok = await imprimerTicketBLE(lignesTicket, largeurBLE, settings);
+    }
+
+    setBusy(false);
+    if(avecImpression && ok) alert("✅ Vente enregistrée et ticket imprimé !");
+    else if(avecImpression && !ok) alert("⚠️ Vente enregistrée, mais l'impression a échoué. Tu peux la réimprimer depuis \"Mes ventes\".");
+    onClose();
+  };
+
+  return (
+    <div className="cart-sheet">
+      <div className="cart-header">
+        <h2>🛒 Panier ({lignes.length})</h2>
+        <button className="icon-btn" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="cart-body">
+        <div className="printer-bar">
+          <span className={connecte?"status-on":"status-off"}>
+            {connecte? "🖨️ Imprimante connectée" : "❌ Imprimante non connectée"}
+          </span>
+          {!connecte && <button className="btn sm secondary" onClick={connecter} disabled={busy}>Connecter</button>}
+        </div>
+        <div className="printer-toggle">
+          <button className={largeurBLE===80?"active":""} onClick={()=>setLargeurBLE(80)}>BLE 80mm</button>
+          <button className={largeurBLE===57?"active":""} onClick={()=>setLargeurBLE(57)}>BLE 57mm</button>
+        </div>
+
+        {lignes.map(l=>(
+          <div className="cart-item" key={l.prod.id}>
+            <div className="row between">
+              <span>{l.prod.nom}</span>
+              <b>{fmtFCFA(l.sousTotal)}</b>
+            </div>
+            <div className="row between">
+              <span className="meta" style={{fontSize:11, color:"var(--text-dim)"}}>{fmtFCFA(l.prod.prix)} / unité</span>
+              <div className="qte-ctrl">
+                <button onClick={()=>onQte(l.prod.id,-1)}>−</button>
+                <b>{l.qte}</b>
+                <button onClick={()=>onQte(l.prod.id,1)}>+</button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <div className="field">
+          <label>Remise</label>
+          <div className="discount-chips">
+            {[0,5,10,15,20].map(p=>(
+              <button key={p} className={remise===p?"active":""} onClick={()=>{setRemise(p); setRemisePerso("");}}>
+                {p===0?"Aucune":p+"%"}
+              </button>
+            ))}
+            <input placeholder="%" value={remisePerso} style={{width:56, padding:6, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:20, color:"var(--text)", textAlign:"center"}}
+              onChange={e=>{setRemisePerso(e.target.value); setRemise(Number(e.target.value)||0);}} />
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Note (optionnel)</label>
+          <input value={note} placeholder="Ajouter une note à cette vente" onChange={e=>setNote(e.target.value)} />
+        </div>
+
+        <button className="btn secondary sm" onClick={()=>setAfficherMonnaie(a=>!a)}>💰 Calculer la monnaie</button>
+        {afficherMonnaie && (
+          <div className="monnaie-box">
+            <div className="field" style={{marginBottom:6}}>
+              <label>Montant reçu du client</label>
+              <input type="number" value={montantRecu} placeholder="0" onChange={e=>setMontantRecu(e.target.value)} />
+            </div>
+            {montantRecu && (
+              <div className="row between">
+                <span>Monnaie à rendre</span>
+                <b style={{color: monnaie<0 ? "var(--red)":"var(--green)"}}>{fmtFCFA(monnaie)}</b>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button className="btn secondary sm" onClick={()=>setAfficherFidelite(a=>!a)}>🎁 Client fidélité (optionnel)</button>
+        {afficherFidelite && (
+          <div className="monnaie-box">
+            <div className="field" style={{marginBottom:6}}>
+              <label>Nom du client</label>
+              <input value={fideliteNom} placeholder="Nom et prénom" onChange={e=>setFideliteNom(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Numéro de téléphone</label>
+              <input value={fideliteTelephone} placeholder="Ex : 70000000" inputMode="tel" onChange={e=>setFideliteTelephone(e.target.value)} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="cart-footer">
+        {remise>0 && (
+          <div className="row between" style={{fontSize:12.5, color:"var(--text-dim)", marginBottom:4}}>
+            <span>Sous-total</span><span>{fmtFCFA(sousTotal)}</span>
+          </div>
+        )}
+        {remise>0 && (
+          <div className="row between" style={{fontSize:12.5, color:"var(--red)", marginBottom:6}}>
+            <span>Remise {remise}%</span><span>-{fmtFCFA(montantRemise)}</span>
+          </div>
+        )}
+        <div className="cart-total-row">
+          <span>TOTAL</span><span className="gold">{fmtFCFA(total)}</span>
+        </div>
+        {afficherCredit && (
+          <div className="monnaie-box" style={{marginBottom:8}}>
+            <div className="field" style={{marginBottom:6}}>
+              <label>Nom du client *</label>
+              <input value={creditNom} placeholder="Nom et prénom" onChange={e=>setCreditNom(e.target.value)} />
+            </div>
+            <div className="field" style={{marginBottom:6}}>
+              <label>Numéro de téléphone *</label>
+              <input value={creditTelephone} placeholder="Ex : 70000000" inputMode="tel" onChange={e=>setCreditTelephone(e.target.value)} />
+            </div>
+            <div className="field" style={{marginBottom:6}}>
+              <label>Motif (optionnel)</label>
+              <input value={creditMotif} placeholder="Ex : oubli de portefeuille" onChange={e=>setCreditMotif(e.target.value)} />
+            </div>
+            <button className="btn credit" disabled={busy} onClick={()=>finaliser(false,true)}>
+              ✔️ Confirmer le crédit
+            </button>
+            <button className="btn secondary sm" style={{marginTop:6}} onClick={()=>setAfficherCredit(false)}>Annuler</button>
+          </div>
+        )}
+        <button className="btn ble" disabled={busy} onClick={()=>finaliser(true,false)} style={{marginBottom:8}}>
+          🖨️ BLE {largeurBLE}mm + Valider
+        </button>
+        <button className="btn" disabled={busy} onClick={()=>finaliser(false,false)} style={{marginBottom:8}}>
+          ✅ Valider sans ticket
+        </button>
+        {!afficherCredit && (
+          <button className="btn credit" disabled={busy} onClick={()=>finaliser(false,true)} style={{marginBottom:8}}>
+            💳 Vendre à crédit
+          </button>
+        )}
+        <button className="btn secondary" onClick={onVider}>Tout annuler</button>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : VENTE (CATALOGUE / CAISSE TACTILE)
+   ===================================================================== */
+function VenteModule({state, patchState, currentUser, journee, settings}){
+  // Zones autorisées pour ce caissier (le propriétaire peut restreindre l'accès par zone)
+  const zonesAutorisees = (currentUser.zones && currentUser.zones.length>0)
+    ? currentUser.zones
+    : (currentUser.zone && currentUser.zone!=="toutes" ? [currentUser.zone] : ["bar","terrasse","liqueur"]);
+  const zonesDisponibles = zonesAutorisees.includes("toutes") ? ["bar","terrasse","liqueur"] : zonesAutorisees;
+
+  const [zone,setZone] = useState(zonesDisponibles[0] || "bar");
+  const [recherche,setRecherche] = useState("");
+  const [panier,setPanier] = useState({}); // { prodId: qte }
+  const [panierOuvert,setPanierOuvert] = useState(false);
+
+  const produits = state.produits.filter(p=>
+    p.zone===zone && (recherche.trim()==="" || p.nom.toLowerCase().includes(recherche.toLowerCase()))
+  );
+
+  const ajouter = (prodId)=>{
+    setPanier(p=>{
+      const nouvelleQte = (p[prodId]||0)+1;
+      const prod = state.produits.find(x=>x.id===prodId);
+      if(prod){
+        const restant = (prod.stock||0) - nouvelleQte;
+        if(restant <= (prod.seuilAlerte||5)) biperAlerte();
+      }
+      return {...p, [prodId]: nouvelleQte};
+    });
+  };
+  const changerQte = (prodId, delta)=>{
+    setPanier(p=>{
+      const n = {...p};
+      n[prodId] = (n[prodId]||0) + delta;
+      if(n[prodId]<=0) delete n[prodId];
+      return n;
+    });
+  };
+  const vider = ()=>{ setPanier({}); setPanierOuvert(false); };
+
+  const lignes = Object.entries(panier).map(([prodId,qte])=>{
+    const prod = state.produits.find(p=>p.id===prodId);
+    return prod ? {prod, qte, sousTotal: prod.prix*qte} : null;
+  }).filter(Boolean);
+
+  const nbArticles = lignes.reduce((s,l)=>s+l.qte,0);
+  const totalRapide = lignes.reduce((s,l)=>s+l.sousTotal,0);
+
+  const validerVente = ({remise, montantRemise, total, note, credit, clientCredit, clientTelephone, clientMotif, clientFideliteNom, clientFideliteTelephone})=>{
+    const vente = {
+      id: uid(),
+      zone,
+      items: lignes.map(l=>({prodId:l.prod.id, nom:l.prod.nom, qte:l.qte, prixUnitaire:l.prod.prix, prixAchat:l.prod.prixAchat||0})),
+      sousTotal: totalRapide,
+      remise, montantRemise, total,
+      note: note||"",
+      credit: !!credit,
+      clientCredit: clientCredit||null,
+      clientTelephone: clientTelephone||null,
+      clientMotif: clientMotif||null,
+      clientFideliteNom: clientFideliteNom||null,
+      clientFideliteTelephone: clientFideliteTelephone||null,
+      paye: credit ? false : null,
+      caissierId: currentUser.id,
+      caissierNom: currentUser.nom,
+      journee,
+      date: new Date().toLocaleString('fr-FR'),
+      timestamp: Date.now()
+    };
+    patchState(draft=>{
+      if(!draft.ventes) draft.ventes = [];
+      draft.ventes.push(vente);
+      if(!draft.stock[journee]) draft.stock[journee] = {};
+      if(!draft.stock[journee][zone]) draft.stock[journee][zone] = {};
+      lignes.forEach(l=>{
+        if(!draft.stock[journee][zone][l.prod.id]) draft.stock[journee][zone][l.prod.id] = {initial:0,entree:0,reste:0};
+        // Décrémente le stock permanent du produit
+        const p = draft.produits.find(x=>x.id===l.prod.id);
+        if(p){
+          p.stock = Math.max(0, (p.stock||0) - l.qte);
+          queueWrite("produits", p.id, p);
+        }
+      });
+    });
+    queueWrite("ventes", vente.id, vente);
+    setPanier({});
+    return vente;
+  };
+
+  return (
+    <div>
+      {panierOuvert && (
+        <PanierSheet
+          lignes={lignes}
+          onQte={changerQte}
+          onVider={vider}
+          onClose={()=>setPanierOuvert(false)}
+          onValider={validerVente}
+          currentUser={currentUser}
+          settings={settings}
+        />
+      )}
+
+      <div className="journee-badge">📅 {formatDateFR(journee)}</div>
+      <div className="search-bar">
+        <input placeholder="🔍 Rechercher un produit..." value={recherche} onChange={e=>setRecherche(e.target.value)} />
+      </div>
+      {zonesDisponibles.length>1 && (
+        <div className="zone-toggle">
+          {zonesDisponibles.map(z=>(
+            <button key={z} className={zone===z?"active":""} onClick={()=>setZone(z)}>
+              {z==="bar"?"Bar":z==="terrasse"?"Terrasse":"Liqueur/Cave"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="pos-grid">
+        {produits.length===0 ? <div className="empty" style={{gridColumn:"span 2"}}>Aucun produit trouvé</div> :
+          produits.map(p=>{
+            const qte = panier[p.id]||0;
+            const restant = (p.stock||0) - qte;
+            const stockBas = restant <= (p.seuilAlerte||5);
+            return (
+              <button key={p.id} className={"pos-tile" + (qte>0?" active":"")} onClick={()=>ajouter(p.id)}>
+                {qte>0 && <span className="pos-qte">{qte}</span>}
+                <span className="pos-nom">{p.nom}</span>
+                <span className="pos-prix">{fmtFCFA(p.prix)}</span>
+                {stockBas && <span className="pill" style={{background:"#3a1212", color:"var(--red)", fontSize:10, marginTop:2}}>⚠️ Stock bas ({Math.max(0,restant)})</span>}
+              </button>
+            );
+          })
+        }
+      </div>
+
+      {lignes.length>0 && !panierOuvert && (
+        <div className="panier-bar" onClick={()=>setPanierOuvert(true)} style={{cursor:"pointer"}}>
+          <div className="panier-total row between">
+            <span>🛒 {nbArticles} article{nbArticles>1?"s":""}</span>
+            <b>{fmtFCFA(totalRapide)}</b>
+          </div>
+          <button className="btn">Voir le panier</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   COMPOSANT : PAVE NUMERIQUE (LOGIN PIN)
+   ===================================================================== */
+function LoginScreen({onLogin, settings, users, onBypass, onCreerProprietaire, onOuvrirDevPanel}){
+  const [pin,setPin] = useState("");
+  const [error,setError] = useState("");
+  const [busy,setBusy] = useState(false);
+
+  // Accès panneau développeur : triple-clic sur le titre (dans la fenêtre de 700ms),
+  // distinct de l'appui long réservé au bypass propriétaire ci-dessous.
+  const clicsRef = useRef([]);
+  const gererClicTitre = ()=>{
+    const maintenant = Date.now();
+    clicsRef.current = [...clicsRef.current.filter(t=>maintenant-t<700), maintenant];
+    if(clicsRef.current.length>=3){
+      clicsRef.current = [];
+      const code = prompt("Code d'accès développeur :");
+      if(code===null) return;
+      if(code.trim() !== DEV_PANEL_PIN){ alert("Code incorrect."); return; }
+      onOuvrirDevPanel();
+    }
+  };
+
+  const press = (d)=>{
+    if(busy) return;
+    setError("");
+    if(d==="back"){ setPin(p=>p.slice(0,-1)); return; }
+    if(pin.length>=6) return;
+    setPin(p=>p+d);
+  };
+
+  const valider = ()=>{
+    if(pin.length<4 || busy) return;
+    setBusy(true);
+    hashPin(pin).then(h=>{
+      onLogin(h, (msg)=>{ setError(msg); setPin(""); setBusy(false); });
+    });
+  };
+
+  // Soumission automatique uniquement quand le PIN atteint la longueur max (6).
+  // Pour les PIN plus courts (4 ou 5 chiffres), l'utilisateur valide avec le bouton ✓.
+  useEffect(()=>{
+    if(pin.length===6) valider();
+  },[pin]);
+
+  // Accès propriétaire caché : appui long (≥800ms) sur le titre + code secret 898989.
+  // L'appui long est utilisé plutôt que le double-tap car sur mobile, deux taps rapides
+  // sont souvent interceptés par le geste natif "double-tap pour zoomer" du navigateur,
+  // ce qui rend le double-tap peu fiable selon les appareils. L'appui long n'a pas cette
+  // ambiguïté et fonctionne de façon constante sur tous les navigateurs tactiles.
+  const pressTimerRef = useRef(null);
+  const demarrerAppuiLong = ()=>{
+    annulerAppuiLong();
+    pressTimerRef.current = setTimeout(()=>{
+      pressTimerRef.current = null;
+      accesProprietaireCache();
+    }, 800);
+  };
+  const annulerAppuiLong = ()=>{
+    if(pressTimerRef.current){ clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
+  };
+  const accesProprietaireCache = ()=>{
+    const code = prompt("Code d'accès propriétaire :");
+    if(code===null) return;
+    if(code.trim() !== "898989"){ alert("Code incorrect."); return; }
+    const proprietaire = (users||[]).find(u=>u.role==="owner");
+    if(proprietaire){ onBypass(proprietaire); return; }
+    // Auto-réparateur : si aucun compte owner n'existe encore (bootstrap pas encore
+    // exécuté, données corrompues, ancien onglet non rechargé...), on en crée un
+    // immédiatement au lieu de simplement bloquer l'accès.
+    onCreerProprietaire().then(nouveau=>{
+      alert("Aucun compte propriétaire n'existait : un nouveau a été créé (PIN par défaut 999999, à changer dans Admin).");
+      onBypass(nouveau);
+    });
+  };
+
+  return (
+    <div className="login-wrap">
+      <div className="brand"
+        onPointerDown={demarrerAppuiLong}
+        onPointerUp={annulerAppuiLong}
+        onPointerLeave={annulerAppuiLong}
+        onPointerCancel={annulerAppuiLong}
+        onClick={gererClicTitre}
+        onContextMenu={(e)=>e.preventDefault()}
+        style={{cursor:"pointer", touchAction:"manipulation", userSelect:"none", WebkitTouchCallout:"none"}}>
+        <h1>{settings.nomEtablissement || "BURKINA AMBIANCE"}</h1>
+        <p>La légende continue</p>
+      </div>
+      <div className="pin-dots">
+        {[0,1,2,3,4,5].map(i=>(
+          <div key={i} className={"pin-dot" + (i<pin.length ? " filled":"")}></div>
+        ))}
+      </div>
+      <div className="login-error">{error}</div>
+      <div className="keypad">
+        {[1,2,3,4,5,6,7,8,9].map(n=>(
+          <button key={n} className="key" onClick={()=>press(String(n))}>{n}</button>
+        ))}
+        <button className="key wide" onClick={()=>setPin("")} style={{fontSize:12}}>Effacer</button>
+        <button className="key" onClick={()=>press("0")}>0</button>
+        <button className="key wide" onClick={()=>press("back")}>⌫</button>
+        <button className="key wide" style={{gridColumn:"span 3", borderRadius:30, background:"var(--gold)", color:"#0d0f14", fontWeight:700}} onClick={valider}>✓ Valider</button>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   COMPOSANT : TICKET IMPRIMABLE
+   ===================================================================== */
+function Ticket({data, type, settings}){
+  const piedLignes = (settings.piedTicket || "Merci de votre confiance !").split("\n").filter(Boolean);
+  return (
+    <div className="ticket" id="print-ticket">
+      {settings.logoDataUrl && (
+        <div className="center" style={{marginBottom:6}}>
+          <img src={settings.logoDataUrl} style={{width:60, height:60, objectFit:"cover", borderRadius:8}} />
+        </div>
+      )}
+      <h4 className="center">{settings.nomEtablissement || "BURKINA AMBIANCE"}</h4>
+      {settings.adresse && <p className="center" style={{margin:"2px 0"}}>{settings.adresse}</p>}
+      <p className="center">{type==="avoir" ? "REÇU D'AVOIR" : "TICKET DE VENTE"}</p>
+      <hr/>
+      {type==="avoir" ? (
+        <>
+          <div className="line"><span>Établissement</span><span>{data.etablissement}</span></div>
+          <div className="line"><span>Montant</span><span>{fmtFCFA(data.montant)}</span></div>
+          <div className="line"><span>Caissier</span><span>{data.caissierNom}</span></div>
+          <div className="line"><span>Date</span><span>{data.date}</span></div>
+          <div className="line"><span>N°</span><span>{data.numero}</span></div>
+        </>
+      ) : (
+        <>
+          <div className="line"><span>Zone</span><span>{data.zone}</span></div>
+          <div className="line ticket-total"><span>TOTAL</span><span>{fmtFCFA(data.total)}</span></div>
+          <div className="line"><span>Caissier</span><span>{data.caissierNom}</span></div>
+          <div className="line"><span>Date</span><span>{data.date}</span></div>
+          {data.note && data.note.trim() && (
+            <>
+              <hr/>
+              <p style={{margin:"2px 0", fontWeight:"bold"}}>Note :</p>
+              <p style={{margin:"2px 0", whiteSpace:"pre-wrap"}}>{data.note.trim()}</p>
+            </>
+          )}
+        </>
+      )}
+      <hr/>
+      <p className="center">Signature caissier : __________</p>
+      <p className="center">Signature serveur : __________</p>
+      <hr/>
+      {piedLignes.map((l,i)=><p className="center" key={i}>{l}</p>)}
+    </div>
+  );
+}
+
+function printNow(){ setTimeout(()=>window.print(), 100); }
+
+/* =====================================================================
+   COMPOSANT : RELEVÉ DE CRÉANCES IMPRIMABLE (caissier et gérant)
+   ===================================================================== */
+function CreancesPrintable({titre, lignes, settings}){
+  return (
+    <div className="ticket" id="print-ticket">
+      <h4 className="center">{settings.nomEtablissement || "BURKINA AMBIANCE"}</h4>
+      <p className="center">{titre}</p>
+      <p className="center" style={{fontSize:11}}>{new Date().toLocaleString('fr-FR')}</p>
+      <hr/>
+      {lignes.length===0 ? <p className="center">Aucune créance</p> : lignes.map((l,i)=>(
+        <React.Fragment key={i}>
+          <div className="line"><span>{l.nom}</span><span>{fmtFCFA(l.montant)}</span></div>
+          {l.telephone && <div className="line" style={{fontSize:11}}><span>Tél.</span><span>{l.telephone}</span></div>}
+          {l.caissier && <div className="line" style={{fontSize:11}}><span>Caissier</span><span>{l.caissier}</span></div>}
+          {l.motif && <div className="line" style={{fontSize:11}}><span>Motif</span><span>{l.motif}</span></div>}
+          <div className="line" style={{fontSize:11}}><span>{l.date}</span><span>{l.statut}</span></div>
+          <hr/>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : STOCK
+   ===================================================================== */
+function StockModule({state, patchState, currentUser, journee}){
+  const [zone,setZone] = useState("bar");
+  const zones = ["bar","terrasse","liqueur"];
+  const produits = state.produits.filter(p=>p.zone===zone);
+  const entries = state.stock[journee]?.[zone] || {};
+
+  const update = (prodId, field, val) => {
+    const num = val===""? "" : Number(val);
+    let nouvelEtat;
+    patchState(draft=>{
+      if(!draft.stock[journee]) draft.stock[journee] = {};
+      if(!draft.stock[journee][zone]) draft.stock[journee][zone] = {};
+      if(!draft.stock[journee][zone][prodId]) draft.stock[journee][zone][prodId] = {initial:0,entree:0,reste:0};
+      draft.stock[journee][zone][prodId][field] = num;
+      nouvelEtat = draft.stock[journee][zone];
+    });
+    // Une seule collection "stock", un document par journée+zone (ex: "2026-07-04_bar")
+    queueWrite("stock", journee + "_" + zone, {journee, zone, produits: nouvelEtat});
+  };
+
+  let totalVenteF = 0;
+
+  return (
+    <div>
+      <div className="journee-badge">📅 Journée comptable : {formatDateFR(journee)}</div>
+      <div className="zone-toggle">
+        {zones.map(z=>(
+          <button key={z} className={zone===z?"active":""} onClick={()=>setZone(z)}>
+            {z==="bar"?"Bar":z==="terrasse"?"Terrasse":"Liqueur/Cave"}
+          </button>
+        ))}
+      </div>
+      <div className="card" style={{overflowX:"auto", padding:8}}>
+        <table className="stock">
+          <thead>
+            <tr>
+              <th style={{textAlign:"left"}}>Produit</th>
+              <th>Initial</th>
+              <th>Entrée</th>
+              <th>Total</th>
+              <th>Reste</th>
+              <th>Vente</th>
+              <th>Vente F</th>
+            </tr>
+          </thead>
+          <tbody>
+            {produits.map(p=>{
+              const e = entries[p.id] || {initial:0,entree:0,reste:0};
+              const total = (Number(e.initial)||0) + (Number(e.entree)||0);
+              const vente = Math.max(0, total - (Number(e.reste)||0));
+              const venteF = vente * p.prix;
+              totalVenteF += venteF;
+              return (
+                <tr key={p.id}>
+                  <td className="name">{p.nom}</td>
+                  <td><input type="number" value={e.initial===0?"":e.initial} placeholder="0" onChange={ev=>update(p.id,"initial",ev.target.value)}/></td>
+                  <td><input type="number" value={e.entree===0?"":e.entree} placeholder="0" onChange={ev=>update(p.id,"entree",ev.target.value)}/></td>
+                  <td>{total}</td>
+                  <td><input type="number" value={e.reste===0?"":e.reste} placeholder="0" onChange={ev=>update(p.id,"reste",ev.target.value)}/></td>
+                  <td>{vente}</td>
+                  <td>{fmtFCFA(venteF)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr><td colSpan="6">Total {zone}</td><td>{fmtFCFA(totalVenteF)}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : CLOTURE JOURNALIERE
+   ===================================================================== */
+function ClotureModule({state, patchState, currentUser, journee}){
+  const cloture = state.clotures[journee] || {
+    depenseTerrasse:0, depenseBar:0, depenseCave:0,
+    recetteTerrasse:0, recetteBar:0, recetteCave:0,
+    versementTerrasse:0, versementBar:0, versementCave:0,
+    creditHomme:0, creditFemme:0, cloturePar:"", cloture:false
+  };
+
+  const set = (field,val)=>{
+    patchState(draft=>{
+      if(!draft.clotures[journee]) draft.clotures[journee] = {...cloture};
+      draft.clotures[journee][field] = field.startsWith("cloture")&&typeof val!=="number" ? val : Number(val)||0;
+      queueWrite("clotures", journee, draft.clotures[journee]);
+    });
+  };
+
+  const totalDepense = (cloture.depenseTerrasse||0)+(cloture.depenseBar||0)+(cloture.depenseCave||0);
+  const totalRecette = (cloture.recetteTerrasse||0)+(cloture.recetteBar||0)+(cloture.recetteCave||0);
+  const totalVersement = (cloture.versementTerrasse||0)+(cloture.versementBar||0)+(cloture.versementCave||0);
+  const totalCredit = (cloture.creditHomme||0)+(cloture.creditFemme||0);
+
+  const finaliser = ()=>{
+    patchState(draft=>{
+      draft.clotures[journee] = {...draft.clotures[journee], cloture:true, cloturePar: currentUser.nom, timestamp: Date.now()};
+      queueWrite("clotures", journee, draft.clotures[journee]);
+    });
+    alert("Clôture enregistrée pour la journée du " + formatDateFR(journee));
+  };
+
+  const champ = (label, field) => (
+    <div className="field">
+      <label>{label}</label>
+      <input type="number" value={cloture[field]||""} placeholder="0"
+        disabled={cloture.cloture}
+        onChange={e=>set(field, e.target.value)} />
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="journee-badge">📅 Journée comptable : {formatDateFR(journee)}
+        {cloture.cloture && <span style={{color:"var(--green)"}}> • Clôturée par {cloture.cloturePar}</span>}
+      </div>
+
+      <div className="card">
+        <h3>Dépenses</h3>
+        {champ("Dépense Terrasse","depenseTerrasse")}
+        {champ("Dépense Bar","depenseBar")}
+        {champ("Dépense Cave à vin","depenseCave")}
+        <div className="row between"><b>Total dépense</b><b>{fmtFCFA(totalDepense)}</b></div>
+      </div>
+
+      <div className="card">
+        <h3>Recettes</h3>
+        {champ("Recette Terrasse","recetteTerrasse")}
+        {champ("Recette Bar","recetteBar")}
+        {champ("Recette Cave à vin","recetteCave")}
+        <div className="row between"><b>Total recette</b><b>{fmtFCFA(totalRecette)}</b></div>
+      </div>
+
+      <div className="card">
+        <h3>Versements</h3>
+        {champ("Versement Terrasse","versementTerrasse")}
+        {champ("Versement Bar","versementBar")}
+        {champ("Versement Cave à vin","versementCave")}
+        <div className="row between"><b>Total versement</b><b>{fmtFCFA(totalVersement)}</b></div>
+      </div>
+
+      <div className="card">
+        <h3>Crédits</h3>
+        {champ("Crédit homme","creditHomme")}
+        {champ("Crédit femme","creditFemme")}
+        <div className="row between"><b>Total crédit</b><b>{fmtFCFA(totalCredit)}</b></div>
+      </div>
+
+      <div className="card">
+        <h3>Récapitulatif</h3>
+        <div className="row between"><span>Total recette</span><b>{fmtFCFA(totalRecette)}</b></div>
+        <div className="row between"><span>Total dépense</span><b>{fmtFCFA(totalDepense)}</b></div>
+        <div className="row between"><span>Total crédit</span><b>{fmtFCFA(totalCredit)}</b></div>
+        <div className="row between"><span>Solde (recette - dépense)</span><b style={{color:"var(--gold)"}}>{fmtFCFA(totalRecette-totalDepense)}</b></div>
+      </div>
+
+      {!cloture.cloture ? (
+        <button className="btn" onClick={finaliser}>Clôturer la journée</button>
+      ) : (
+        <div className="empty">✓ Journée déjà clôturée. Contactez le propriétaire pour modifier.</div>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : REAPPROVISIONNEMENT / AJUSTEMENT DE STOCK (gérant + propriétaire)
+   ===================================================================== */
+function ReapproModule({state, patchState, currentUser}){
+  const [zone,setZone] = useState("bar");
+  const [modeAjustement,setModeAjustement] = useState(null); // id produit en cours d'édition
+  const [qte,setQte] = useState("");
+  const [prixAchat,setPrixAchat] = useState("");
+  const [nouveauStock,setNouveauStock] = useState("");
+  const [raison,setRaison] = useState("");
+
+  const produits = state.produits.filter(p=>p.zone===zone);
+
+  const ouvrirReappro = (p)=>{
+    setModeAjustement({id:p.id, type:"reappro"});
+    setQte(""); setPrixAchat(p.prixAchat || "");
+  };
+  const ouvrirAjustement = (p)=>{
+    setModeAjustement({id:p.id, type:"ajustement"});
+    setNouveauStock(p.stock || 0); setRaison("");
+  };
+  const fermer = ()=> setModeAjustement(null);
+
+  const confirmerReappro = (p)=>{
+    const q = Number(qte);
+    if(!q || q<=0){ alert("Quantité invalide"); return; }
+    const achat = Number(prixAchat)||0;
+    const avant = p.stock||0;
+    const mouvement = {
+      id: uid(), produitId:p.id, produitNom:p.nom, zone:p.zone, type:"reappro",
+      quantite:q, avant, apres: avant+q, prixAchat: achat, cout: achat*q,
+      auteur: currentUser.nom, date: new Date().toLocaleString('fr-FR'), timestamp: Date.now()
+    };
+    patchState(draft=>{
+      const prod = draft.produits.find(x=>x.id===p.id);
+      if(prod){
+        prod.stock = (prod.stock||0)+q; if(achat>0) prod.prixAchat = achat;
+        queueWrite("produits", prod.id, prod);
+      }
+      if(!draft.mouvements) draft.mouvements = [];
+      draft.mouvements.push(mouvement);
+    });
+    queueWrite("mouvements", mouvement.id, mouvement);
+    fermer();
+  };
+
+  const confirmerAjustement = (p)=>{
+    const n = Number(nouveauStock);
+    if(n<0 || isNaN(n)){ alert("Valeur invalide"); return; }
+    const avant = p.stock||0;
+    const mouvement = {
+      id: uid(), produitId:p.id, produitNom:p.nom, zone:p.zone, type:"ajustement",
+      quantite: n-avant, avant, apres:n, raison: raison||"Correction inventaire",
+      auteur: currentUser.nom, date: new Date().toLocaleString('fr-FR'), timestamp: Date.now()
+    };
+    patchState(draft=>{
+      const prod = draft.produits.find(x=>x.id===p.id);
+      if(prod){
+        prod.stock = n;
+        queueWrite("produits", prod.id, prod);
+      }
+      if(!draft.mouvements) draft.mouvements = [];
+      draft.mouvements.push(mouvement);
+    });
+    queueWrite("mouvements", mouvement.id, mouvement);
+    fermer();
+  };
+
+  const mouvementsRecents = (state.mouvements||[]).slice().sort((a,b)=>b.timestamp-a.timestamp).slice(0,15);
+
+  return (
+    <div>
+      <div className="zone-toggle">
+        {["bar","terrasse","liqueur"].map(z=>(
+          <button key={z} className={zone===z?"active":""} onClick={()=>setZone(z)}>
+            {z==="bar"?"Bar":z==="terrasse"?"Terrasse":"Liqueur/Cave"}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <h3>Stock actuel — {zone}</h3>
+        {produits.length===0 ? <div className="empty">Aucun produit</div> :
+          produits.map(p=>(
+            <div key={p.id}>
+              <div className="list-item">
+                <div>
+                  <div>{p.nom} {(p.stock||0)<=(p.seuilAlerte||5) && <span className="pill" style={{background:"#3a1212", color:"var(--red)"}}>Stock bas</span>}</div>
+                  <div className="meta">Stock : {p.stock||0} • Achat : {fmtFCFA(p.prixAchat||0)}</div>
+                </div>
+                <div className="row" style={{gap:6}}>
+                  <button className="btn sm secondary" onClick={()=>ouvrirReappro(p)}>+ Réappro</button>
+                  <button className="btn sm secondary" onClick={()=>ouvrirAjustement(p)}>Ajuster</button>
+                </div>
+              </div>
+
+              {modeAjustement && modeAjustement.id===p.id && modeAjustement.type==="reappro" && (
+                <div className="card" style={{background:"var(--bg3)"}}>
+                  <div className="field"><label>Quantité reçue</label>
+                    <input type="number" value={qte} placeholder="0" onChange={e=>setQte(e.target.value)} />
+                  </div>
+                  <div className="field"><label>Prix d'achat unitaire (F CFA)</label>
+                    <input type="number" value={prixAchat} placeholder="0" onChange={e=>setPrixAchat(e.target.value)} />
+                  </div>
+                  {qte && prixAchat && (
+                    <div className="row between" style={{marginBottom:10, fontSize:13}}>
+                      <span>Coût total</span><b>{fmtFCFA(Number(qte)*Number(prixAchat))}</b>
+                    </div>
+                  )}
+                  <div className="row" style={{gap:8}}>
+                    <button className="btn secondary" onClick={fermer}>Annuler</button>
+                    <button className="btn" onClick={()=>confirmerReappro(p)}>Confirmer</button>
+                  </div>
+                </div>
+              )}
+
+              {modeAjustement && modeAjustement.id===p.id && modeAjustement.type==="ajustement" && (
+                <div className="card" style={{background:"var(--bg3)"}}>
+                  <div className="field"><label>Stock réel constaté</label>
+                    <input type="number" value={nouveauStock} onChange={e=>setNouveauStock(e.target.value)} />
+                  </div>
+                  <div className="field"><label>Raison (optionnel)</label>
+                    <input value={raison} placeholder="Ex : casse, inventaire physique..." onChange={e=>setRaison(e.target.value)} />
+                  </div>
+                  <div className="row" style={{gap:8}}>
+                    <button className="btn secondary" onClick={fermer}>Annuler</button>
+                    <button className="btn" onClick={()=>confirmerAjustement(p)}>Confirmer</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+
+      <div className="card">
+        <h3>Derniers mouvements</h3>
+        {mouvementsRecents.length===0 ? <div className="empty">Aucun mouvement enregistré</div> :
+          mouvementsRecents.map(m=>(
+            <div className="list-item" key={m.id}>
+              <div>
+                <div>{m.produitNom} <span className="meta">({m.type==="reappro"?"réappro":"ajustement"})</span></div>
+                <div className="meta">{m.avant} → {m.apres} • {m.auteur} • {m.date}</div>
+              </div>
+              <b style={{color: m.apres>=m.avant?"var(--green)":"var(--red)"}}>
+                {m.apres>=m.avant?"+":""}{m.apres-m.avant}
+              </b>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : DETTES / CREDIT CLIENT
+   ===================================================================== */
+function DettesModule({state, patchState, settings}){
+  const [search,setSearch] = useState("");
+  const [apercuImpression,setApercuImpression] = useState(false);
+
+  const ventesCredit = (state.ventes||[]).filter(v=>v.credit);
+  const marquerPaye = (venteId)=>{
+    patchState(draft=>{
+      const v = draft.ventes.find(x=>x.id===venteId);
+      if(v){ v.paye = true; queueWrite("ventes", v.id, v); }
+    });
+  };
+  const soldeTout = (client)=>{
+    if(!confirm("Marquer toutes les dettes de "+client+" comme payées ?")) return;
+    patchState(draft=>{
+      draft.ventes.filter(v=>v.credit && v.clientCredit===client && !v.paye).forEach(v=>{
+        v.paye = true;
+        queueWrite("ventes", v.id, v);
+      });
+    });
+  };
+
+  const parClient = {};
+  ventesCredit.forEach(v=>{
+    const c = v.clientCredit || "Client inconnu";
+    if(!parClient[c]) parClient[c] = {impaye:0, paye:0, ventes:[]};
+    parClient[c][v.paye ? "paye" : "impaye"] += v.total;
+    parClient[c].ventes.push(v);
+  });
+
+  const clients = Object.entries(parClient)
+    .filter(([nom])=> nom.toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=> b[1].impaye - a[1].impaye);
+
+  const totalDetteGlobale = clients.reduce((s,[,d])=>s+d.impaye,0);
+
+  return (
+    <div>
+      <div className="card">
+        <h3>💳 Total des dettes en cours</h3>
+        <div className="kpi-value" style={{color: totalDetteGlobale>0 ? "var(--red)" : "var(--green)"}}>
+          {fmtFCFA(totalDetteGlobale)}
+        </div>
+        <button className="btn secondary sm" style={{marginTop:8}} onClick={()=>setApercuImpression(a=>!a)}>
+          🖨️ {apercuImpression ? "Masquer l'aperçu" : "Imprimer le relevé complet"}
+        </button>
+      </div>
+
+      {apercuImpression && (
+        <div className="card">
+          <CreancesPrintable
+            titre="RELEVÉ GLOBAL DES CRÉANCES"
+            settings={settings || {}}
+            lignes={clients.flatMap(([nom,d])=> d.ventes.filter(v=>!v.paye).map(v=>({
+              nom, telephone: v.clientTelephone, caissier: v.caissierNom, motif: v.clientMotif,
+              date: v.date, statut:"Impayé", montant: v.total
+            })))}
+          />
+          <button className="btn" style={{marginTop:10}} onClick={printNow}>🌐 Lancer l'impression</button>
+        </div>
+      )}
+
+      <div className="search-bar">
+        <input placeholder="🔍 Rechercher un client..." value={search} onChange={e=>setSearch(e.target.value)} />
+      </div>
+
+      {clients.length===0 ? <div className="empty">Aucune vente à crédit enregistrée</div> :
+        clients.map(([nom, d])=>(
+          <div className="card" key={nom}>
+            <div className="row between" style={{marginBottom:8}}>
+              <h3 style={{margin:0}}>{nom}</h3>
+              {d.impaye>0 && <button className="btn sm secondary" onClick={()=>soldeTout(nom)}>Solder tout</button>}
+            </div>
+            <div className="row between" style={{marginBottom:8}}>
+              <span>Dette en cours</span>
+              <b style={{color: d.impaye>0 ? "var(--red)":"var(--green)"}}>{fmtFCFA(d.impaye)}</b>
+            </div>
+            {d.paye>0 && (
+              <div className="row between" style={{marginBottom:8, fontSize:12, color:"var(--text-dim)"}}>
+                <span>Déjà réglé</span><span>{fmtFCFA(d.paye)}</span>
+              </div>
+            )}
+            {d.ventes.sort((a,b)=>b.timestamp-a.timestamp).map(v=>(
+              <div className="list-item" key={v.id}>
+                <div>
+                  <div>{fmtFCFA(v.total)} • <span className={v.paye?"pill gerant":"pill"} style={!v.paye?{background:"#3a1212", color:"var(--red)"}:{}}>{v.paye?"Payé":"Impayé"}</span></div>
+                  <div className="meta">{v.date} • {v.caissierNom}</div>
+                  {v.clientTelephone && <div className="meta">📞 {v.clientTelephone}</div>}
+                  {v.clientMotif && <div className="meta">Motif : {v.clientMotif}</div>}
+                  <div className="meta">{v.items.map(i=>i.nom+" ×"+i.qte).join(", ")}</div>
+                </div>
+                {!v.paye && <button className="btn sm secondary" onClick={()=>marquerPaye(v.id)}>Marquer payé</button>}
+              </div>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : MES CRÉANCES (caissier — historique de ses propres clients à crédit)
+   ===================================================================== */
+function MesCreancesModule({state, patchState, currentUser, settings}){
+  const [search,setSearch] = useState("");
+  const [apercuImpression,setApercuImpression] = useState(false);
+
+  const mesCredits = (state.ventes||[]).filter(v=>v.credit && v.caissierId===currentUser.id);
+
+  const parClient = {};
+  mesCredits.forEach(v=>{
+    const c = v.clientCredit || "Client inconnu";
+    if(!parClient[c]) parClient[c] = {impaye:0, paye:0, telephone:v.clientTelephone, ventes:[]};
+    parClient[c][v.paye ? "paye" : "impaye"] += v.total;
+    parClient[c].ventes.push(v);
+  });
+
+  const clients = Object.entries(parClient)
+    .filter(([nom])=> nom.toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=> b[1].impaye - a[1].impaye);
+
+  const totalImpaye = clients.reduce((s,[,d])=>s+d.impaye,0);
+
+  const lignesImprimables = clients.flatMap(([nom,d])=> d.ventes.filter(v=>!v.paye).map(v=>({
+    nom, telephone: v.clientTelephone, motif: v.clientMotif, date: v.date, statut:"Impayé", montant: v.total
+  })));
+
+  return (
+    <div>
+      <div className="card">
+        <h3>💳 Mes créances en cours</h3>
+        <div className="kpi-value" style={{color: totalImpaye>0 ? "var(--red)" : "var(--green)"}}>
+          {fmtFCFA(totalImpaye)}
+        </div>
+        <button className="btn secondary sm" style={{marginTop:8}} onClick={()=>setApercuImpression(a=>!a)}>
+          🖨️ {apercuImpression ? "Masquer l'aperçu" : "Imprimer mon relevé"}
+        </button>
+      </div>
+
+      {apercuImpression && (
+        <div className="card">
+          <CreancesPrintable titre={"CRÉANCES — "+currentUser.nom} settings={settings || {}} lignes={lignesImprimables} />
+          <button className="btn" style={{marginTop:10}} onClick={printNow}>🌐 Lancer l'impression</button>
+        </div>
+      )}
+
+      <div className="search-bar">
+        <input placeholder="🔍 Rechercher un client..." value={search} onChange={e=>setSearch(e.target.value)} />
+      </div>
+
+      {clients.length===0 ? <div className="empty">Aucun client à crédit enregistré</div> :
+        clients.map(([nom, d])=>(
+          <div className="card" key={nom}>
+            <div className="row between" style={{marginBottom:8}}>
+              <h3 style={{margin:0}}>{nom}</h3>
+              <b style={{color: d.impaye>0 ? "var(--red)":"var(--green)"}}>{fmtFCFA(d.impaye)}</b>
+            </div>
+            {d.telephone && <div className="meta" style={{marginBottom:6}}>📞 {d.telephone}</div>}
+            {d.ventes.sort((a,b)=>b.timestamp-a.timestamp).map(v=>(
+              <div className="list-item" key={v.id}>
+                <div>
+                  <div>{fmtFCFA(v.total)} • <span className={v.paye?"pill gerant":"pill"} style={!v.paye?{background:"#3a1212", color:"var(--red)"}:{}}>{v.paye?"Payé":"Impayé"}</span></div>
+                  <div className="meta">{v.date}</div>
+                  {v.clientMotif && <div className="meta">Motif : {v.clientMotif}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : MES VENTES (caissier — CA personnel, réimpression, annulation)
+   ===================================================================== */
+function MesVentesModule({state, patchState, currentUser, journee, settings}){
+  const [dateFiltre,setDateFiltre] = useState(journee);
+  const [printing,setPrinting] = useState(null);
+  const [connecte,setConnecte] = useState(!!blePrinterRef.characteristic);
+  const [busy,setBusy] = useState(false);
+
+  const mesVentes = (state.ventes||[])
+    .filter(v=>v.caissierId===currentUser.id && v.journee===dateFiltre)
+    .sort((a,b)=>b.timestamp-a.timestamp);
+
+  const ventesValides = mesVentes.filter(v=>!v.annulee);
+  const totalCA = ventesValides.reduce((s,v)=>s+v.total,0);
+  const nbAnnulees = mesVentes.filter(v=>v.annulee).length;
+
+  const annuler = (venteId)=>{
+    const raison = prompt("Justificatif obligatoire — pourquoi annuler cette vente ?");
+    if(!raison || !raison.trim()){ alert("Annulation refusée : un justificatif est requis."); return; }
+    patchState(draft=>{
+      const v = draft.ventes.find(x=>x.id===venteId);
+      if(v && !v.annulee){
+        v.annulee = true;
+        v.raisonAnnulation = raison.trim();
+        v.items.forEach(it=>{
+          const p = draft.produits.find(x=>x.id===it.prodId);
+          if(p){
+            p.stock = (p.stock||0) + it.qte;
+            queueWrite("produits", p.id, p);
+          }
+        });
+        queueWrite("ventes", v.id, v);
+      }
+    });
+  };
+
+  const connecter = async ()=>{
+    setBusy(true);
+    const ok = await connecterImprimanteBLE();
+    setConnecte(ok);
+    setBusy(false);
+  };
+
+  const reimprimer = async (largeur)=>{
+    setBusy(true);
+    const lignes = ticketLignesVente(printing, settings);
+    const ok = await imprimerTicketBLE(lignes, largeur, settings);
+    setBusy(false);
+    if(ok) alert("✅ Ticket réimprimé !");
+  };
+
+  return (
+    <div>
+      {printing && (
+        <div style={{position:"fixed", inset:0, background:"#000c", zIndex:50, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12, padding:20}}>
+          <Ticket data={printing} type="vente" settings={settings} />
+          <div className="printer-bar" style={{width:280}}>
+            <span className={connecte?"status-on":"status-off"}>{connecte?"🖨️ Connectée":"❌ Non connectée"}</span>
+            {!connecte && <button className="btn sm secondary" disabled={busy} onClick={connecter}>Connecter</button>}
+          </div>
+          <div className="row" style={{width:280, flexWrap:"wrap", gap:8}}>
+            <button className="btn ble" disabled={busy} onClick={()=>reimprimer(80)}>🖨️ BLE 80mm</button>
+            <button className="btn ble" disabled={busy} onClick={()=>reimprimer(57)}>🖨️ BLE 57mm</button>
+          </div>
+          <div className="row" style={{width:280}}>
+            <button className="btn secondary" onClick={printNow}>🌐 Navigateur</button>
+            <button className="btn secondary" onClick={()=>setPrinting(null)}>Fermer</button>
+          </div>
+        </div>
+      )}
+
+      <div className="field">
+        <label>Date</label>
+        <input type="date" value={dateFiltre} onChange={e=>setDateFiltre(e.target.value)} />
+      </div>
+
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <span className="kpi-label">Mon CA</span>
+          <span className="kpi-value">{fmtFCFA(totalCA)}</span>
+          <span className="kpi-sub">{ventesValides.length} vente{ventesValides.length>1?"s":""}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Annulations</span>
+          <span className="kpi-value" style={{color: nbAnnulees>0?"var(--red)":"var(--gold)"}}>{nbAnnulees}</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Mes ventes — {formatDateFR(dateFiltre)}</h3>
+        {mesVentes.length===0 ? <div className="empty">Aucune vente ce jour</div> :
+          mesVentes.map(v=>(
+            <div className="list-item" key={v.id} style={{flexWrap:"wrap"}}>
+              <div>
+                <div>
+                  {fmtFCFA(v.total)} <span style={{textTransform:"capitalize", color:"var(--text-dim)", fontSize:11}}>({v.zone})</span>
+                  {v.annulee && <span className="pill" style={{background:"#3a1212", color:"var(--red)", marginLeft:6}}>Annulée</span>}
+                </div>
+                <div className="meta">{v.date}</div>
+                <div className="meta">{v.items.map(i=>i.nom+" ×"+i.qte).join(", ")}</div>
+                {v.annulee && v.raisonAnnulation && <div className="meta" style={{color:"var(--red)"}}>Motif : {v.raisonAnnulation}</div>}
+              </div>
+              {!v.annulee && (
+                <div className="row" style={{gap:6, marginTop:6}}>
+                  <button className="btn sm secondary" onClick={()=>setPrinting(v)}>🖨️ Réimprimer</button>
+                  <button className="btn sm danger" onClick={()=>annuler(v.id)}>Annuler</button>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : AVOIRS
+   ===================================================================== */
+function AvoirsModule({state, patchState, currentUser, journee, settings}){
+  const [form,setForm] = useState({etablissement: settings.nomEtablissement||"", montant:"", caissierNom: currentUser.nom});
+  const [search,setSearch] = useState("");
+  const [printing,setPrinting] = useState(null);
+  const [connecte,setConnecte] = useState(!!blePrinterRef.characteristic);
+  const [busy,setBusy] = useState(false);
+
+  const creerAvoir = ()=>{
+    if(!form.montant || Number(form.montant)<=0){ alert("Montant invalide"); return; }
+    const avoir = {
+      id: uid(),
+      etablissement: form.etablissement,
+      montant: Number(form.montant),
+      caissierNom: form.caissierNom,
+      caissierId: currentUser.id,
+      date: new Date().toLocaleString('fr-FR'),
+      journee,
+      numero: "AV-" + Date.now().toString().slice(-6),
+      imprime:false
+    };
+    patchState(draft=>{ draft.avoirs.push(avoir); });
+    queueWrite("avoirs", avoir.id, avoir);
+    setForm({...form, montant:""});
+    setPrinting(avoir);
+  };
+
+  const marquerImprime = (id)=>{
+    patchState(draft=>{
+      const a = draft.avoirs.find(x=>x.id===id);
+      if(a){ a.imprime = true; queueWrite("avoirs", a.id, a); }
+    });
+  };
+
+  const connecter = async ()=>{
+    setBusy(true);
+    const ok = await connecterImprimanteBLE();
+    setConnecte(ok);
+    setBusy(false);
+  };
+
+  const imprimerBLE = async (largeur)=>{
+    setBusy(true);
+    const lignes = ticketLignesAvoir(printing, settings);
+    await imprimerTicketBLE(lignes, largeur, settings);
+    marquerImprime(printing.id);
+    setBusy(false);
+  };
+
+  const resultats = state.avoirs
+    .filter(a => a.caissierNom.toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=> b.id.localeCompare(a.id));
+
+  return (
+    <div>
+      {printing && (
+        <div style={{position:"fixed", inset:0, background:"#000c", zIndex:50, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12, padding:20}}>
+          <Ticket data={printing} type="avoir" settings={settings} />
+          <div className="printer-bar" style={{width:280}}>
+            <span className={connecte?"status-on":"status-off"}>{connecte?"🖨️ Connectée":"❌ Non connectée"}</span>
+            {!connecte && <button className="btn sm secondary" disabled={busy} onClick={connecter}>Connecter</button>}
+          </div>
+          <div className="row" style={{width:280, flexWrap:"wrap", gap:8}}>
+            {connecte && <button className="btn ble" disabled={busy} onClick={()=>imprimerBLE(80)}>🖨️ BLE 80mm</button>}
+            {connecte && <button className="btn ble" disabled={busy} onClick={()=>imprimerBLE(57)}>🖨️ BLE 57mm</button>}
+          </div>
+          <div className="row" style={{width:280}}>
+            <button className="btn secondary" onClick={()=>{printNow(); marquerImprime(printing.id);}}>🌐 Navigateur</button>
+            <button className="btn secondary" onClick={()=>setPrinting(null)}>Fermer</button>
+          </div>
+        </div>
+      )}
+
+      <div className="card">
+        <h3>Nouvel avoir</h3>
+        <div className="field">
+          <label>Nom de l'établissement</label>
+          <input value={form.etablissement} onChange={e=>setForm({...form,etablissement:e.target.value})}/>
+        </div>
+        <div className="field">
+          <label>Montant de l'avoir</label>
+          <input type="number" value={form.montant} placeholder="0" onChange={e=>setForm({...form,montant:e.target.value})}/>
+        </div>
+        <div className="field">
+          <label>Caissier ayant livré l'avoir</label>
+          <input value={form.caissierNom} onChange={e=>setForm({...form,caissierNom:e.target.value})}/>
+        </div>
+        <button className="btn" onClick={creerAvoir}>Enregistrer et imprimer</button>
+      </div>
+
+      <div className="card">
+        <h3>Retrouver un avoir (par caissier)</h3>
+        <div className="search-bar">
+          <input placeholder="Nom du caissier..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        {resultats.length===0 ? (
+          <div className="empty">Aucun avoir trouvé</div>
+        ) : resultats.map(a=>(
+          <div className="list-item" key={a.id}>
+            <div>
+              <div>{fmtFCFA(a.montant)} — <b>{a.caissierNom}</b></div>
+              <div className="meta">{a.numero} • {a.date}</div>
+            </div>
+            <button className="btn sm secondary" onClick={()=>setPrinting(a)}>Voir / Imprimer</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : SUIVI DES VENTES (gérant + propriétaire)
+   ===================================================================== */
+const NOMS_JOURS = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+function joursSemaine(lundi){
+  const arr=[];
+  const d = new Date(lundi+"T00:00:00");
+  for(let i=0;i<7;i++){
+    const cur = new Date(d); cur.setDate(d.getDate()+i);
+    arr.push(cur.toISOString().slice(0,10));
+  }
+  return arr;
+}
+
+/* =====================================================================
+   MODULE : CLASSEMENT CAISSIERS + REGISTRE DES ANNULATIONS (gérant/owner)
+   ===================================================================== */
+const SEUIL_TAUX_ANNULATION = 20; // % au-delà duquel on alerte le gérant
+
+function ClassementModule({state, settings}){
+  const [periode,setPeriode] = useState("mois"); // "semaine" | "mois"
+  const [ref,setRef] = useState(new Date().toISOString().slice(0,10));
+
+  const toutesVentes = state.ventes || [];
+
+  let ventesPeriode;
+  let labelPeriode;
+  if(periode==="semaine"){
+    const { debut, fin } = semaineDe(ref);
+    ventesPeriode = toutesVentes.filter(v=>v.journee>=debut && v.journee<=fin);
+    labelPeriode = "Semaine du "+formatDateFR(debut);
+  } else {
+    const mois = moisDe(ref);
+    ventesPeriode = toutesVentes.filter(v=>moisDe(v.journee)===mois);
+    labelPeriode = "Mois de "+new Date(mois+"-01T00:00:00").toLocaleDateString('fr-FR',{month:'long', year:'numeric'});
+  }
+
+  const parCaissier = {};
+  ventesPeriode.forEach(v=>{
+    const c = v.caissierNom || "Inconnu";
+    if(!parCaissier[c]) parCaissier[c] = {ca:0, nbVentes:0, nbAnnul:0, credits:0};
+    if(v.annulee){
+      parCaissier[c].nbAnnul += 1;
+    } else {
+      parCaissier[c].ca += v.total;
+      parCaissier[c].nbVentes += 1;
+      if(v.credit) parCaissier[c].credits += v.total;
+    }
+  });
+
+  const classement = Object.entries(parCaissier).map(([nom,d])=>{
+    const totalActes = d.nbVentes + d.nbAnnul;
+    const tauxAnnul = totalActes>0 ? Math.round((d.nbAnnul/totalActes)*100) : 0;
+    return {nom, ...d, tauxAnnul};
+  }).sort((a,b)=>b.ca-a.ca);
+
+  const annulationsPeriode = ventesPeriode.filter(v=>v.annulee).sort((a,b)=>b.timestamp-a.timestamp);
+
+  // ---- Fidélité clients (toutes périodes confondues, identifiés par téléphone) ----
+  const seuilFidelite = (settings && settings.fideliteSeuil) || 10;
+  const parClientFidelite = {};
+  toutesVentes.filter(v=>!v.annulee).forEach(v=>{
+    const tel = v.clientTelephone || v.clientFideliteTelephone;
+    if(!tel) return;
+    const nom = v.clientCredit || v.clientFideliteNom || "Client";
+    if(!parClientFidelite[tel]) parClientFidelite[tel] = {nom, tel, visites:0, total:0};
+    parClientFidelite[tel].visites += 1;
+    parClientFidelite[tel].total += v.total;
+  });
+  const clientsFideles = Object.values(parClientFidelite).sort((a,b)=>b.visites-a.visites);
+
+  return (
+    <div>
+      <div className="zone-toggle">
+        <button className={periode==="semaine"?"active":""} onClick={()=>setPeriode("semaine")}>Semaine</button>
+        <button className={periode==="mois"?"active":""} onClick={()=>setPeriode("mois")}>Mois</button>
+      </div>
+      <div className="field">
+        <label>Date de référence</label>
+        <input type="date" value={ref} onChange={e=>setRef(e.target.value)} />
+      </div>
+
+      <div className="card">
+        <h3>🏆 Classement — {labelPeriode}</h3>
+        {classement.length===0 ? <div className="empty">Aucune vente sur cette période</div> :
+          classement.map((c,i)=>(
+            <div className="list-item" key={c.nom}>
+              <div>
+                <div>{i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)+"."} <b>{c.nom}</b></div>
+                <div className="meta">{c.nbVentes} vente{c.nbVentes>1?"s":""} • Crédits accordés : {fmtFCFA(c.credits)}</div>
+                <div className="meta" style={c.tauxAnnul>SEUIL_TAUX_ANNULATION?{color:"var(--red)", fontWeight:700}:{}}>
+                  {c.nbAnnul} annulation{c.nbAnnul>1?"s":""} ({c.tauxAnnul}%) {c.tauxAnnul>SEUIL_TAUX_ANNULATION && "⚠️ Taux anormalement élevé"}
+                </div>
+              </div>
+              <b className="gold">{fmtFCFA(c.ca)}</b>
+            </div>
+          ))
+        }
+      </div>
+
+      <div className="card">
+        <h3>🗑️ Registre des annulations — {labelPeriode}</h3>
+        {annulationsPeriode.length===0 ? <div className="empty">Aucune annulation sur cette période</div> :
+          annulationsPeriode.map(v=>(
+            <div className="list-item" key={v.id}>
+              <div>
+                <div>{fmtFCFA(v.total)} • {v.caissierNom}</div>
+                <div className="meta">{v.date}</div>
+                <div className="meta">Motif : {v.raisonAnnulation || "(non renseigné)"}</div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div className="card">
+        <h3>🎁 Fidélité clients</h3>
+        <p style={{fontSize:11, color:"var(--text-dim)", marginBottom:8}}>
+          Offre due tous les {seuilFidelite} achats (historique complet, tous les clients identifiés par téléphone).
+        </p>
+        {clientsFideles.length===0 ? <div className="empty">Aucun client identifié pour l'instant</div> :
+          clientsFideles.slice(0,20).map(c=>{
+            const eligible = c.visites>0 && c.visites % seuilFidelite === 0;
+            return (
+              <div className="list-item" key={c.tel}>
+                <div>
+                  <div>{c.nom} {eligible && <span className="pill gerant">🎁 Offre due</span>}</div>
+                  <div className="meta">📞 {c.tel} • {c.visites} achat{c.visites>1?"s":""}</div>
+                </div>
+                <b>{fmtFCFA(c.total)}</b>
+              </div>
+            );
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : VENTES (gérant/owner — filtres, réimpression, annulation)
+   ===================================================================== */
+function VentesModule({state, patchState, journee}){
+  const [vue,setVue] = useState("jour"); // "jour" | "semaine"
+  const [filterJournee, setFilterJournee] = useState(journee);
+  const [filterCaissier, setFilterCaissier] = useState("");
+  const [filterZone, setFilterZone] = useState("");
+  const [semaineRef, setSemaineRef] = useState(journee);
+
+  const toutesVentes = state.ventes || [];
+  const caissiers = [...new Set(toutesVentes.map(v=>v.caissierNom))];
+
+  const annuler = (venteId)=>{
+    const raison = prompt("Justificatif obligatoire — pourquoi annuler cette vente ?");
+    if(!raison || !raison.trim()){ alert("Annulation refusée : un justificatif est requis."); return; }
+    patchState(draft=>{
+      const v = draft.ventes.find(x=>x.id===venteId);
+      if(v && !v.annulee){
+        v.annulee = true;
+        v.raisonAnnulation = raison.trim();
+        v.items.forEach(it=>{
+          const p = draft.produits.find(x=>x.id===it.prodId);
+          if(p){
+            p.stock = (p.stock||0) + it.qte;
+            queueWrite("produits", p.id, p);
+          }
+        });
+        queueWrite("ventes", v.id, v);
+      }
+    });
+  };
+
+  const ventes = toutesVentes.filter(v=>
+    v.journee===filterJournee && !v.annulee &&
+    (filterCaissier? v.caissierNom===filterCaissier : true) &&
+    (filterZone? v.zone===filterZone : true)
+  ).sort((a,b)=>b.timestamp-a.timestamp);
+  const ventesAnnuleesJour = toutesVentes.filter(v=>v.journee===filterJournee && v.annulee);
+
+  const totalJour = ventes.reduce((s,v)=>s+v.total,0);
+  const parCaissier = {};
+  ventes.forEach(v=>{ parCaissier[v.caissierNom] = (parCaissier[v.caissierNom]||0) + v.total; });
+
+  // ---- Vue semaine ----
+  const { debut: lundiSemaine } = semaineDe(semaineRef);
+  const jours = joursSemaine(lundiSemaine);
+  const donneesJours = jours.map((jourIso, i)=>{
+    const ventesJ = toutesVentes.filter(v=>v.journee===jourIso && !v.annulee);
+    const annulJ = toutesVentes.filter(v=>v.journee===jourIso && v.annulee).length;
+    const { ca, marge } = calculerCAEtMarge(ventesJ);
+    const cl = state.clotures[jourIso];
+    const depense = cl ? (cl.depenseTerrasse||0)+(cl.depenseBar||0)+(cl.depenseCave||0) : 0;
+    return { jourIso, nom: NOMS_JOURS[i], ca, marge, depense, net: marge-depense, nbVentes: ventesJ.length, annulations: annulJ, estAujourdhui: jourIso===journee, sansDonnees: ventesJ.length===0 && annulJ===0 };
+  });
+  const totalSemaineCA = donneesJours.reduce((s,j)=>s+j.ca,0);
+  const totalSemaineMarge = donneesJours.reduce((s,j)=>s+j.marge,0);
+  const totalSemaineDepense = donneesJours.reduce((s,j)=>s+j.depense,0);
+  const totalSemaineVentes = donneesJours.reduce((s,j)=>s+j.nbVentes,0);
+  const totalSemaineAnnul = donneesJours.reduce((s,j)=>s+j.annulations,0);
+  const beneficeNetSemaine = totalSemaineMarge - totalSemaineDepense;
+
+  const changerSemaine = (delta)=>{
+    const d = new Date(lundiSemaine+"T00:00:00");
+    d.setDate(d.getDate()+delta*7);
+    setSemaineRef(d.toISOString().slice(0,10));
+  };
+
+  return (
+    <div>
+      <div className="zone-toggle">
+        <button className={vue==="jour"?"active":""} onClick={()=>setVue("jour")}>Jour</button>
+        <button className={vue==="semaine"?"active":""} onClick={()=>setVue("semaine")}>Semaine</button>
+      </div>
+
+      {vue==="jour" && (
+        <>
+          <div className="journee-badge">📅 {formatDateFR(filterJournee)}</div>
+
+          <div className="card">
+            <h3>Filtres</h3>
+            <div className="field">
+              <label>Journée comptable</label>
+              <input type="date" value={filterJournee} onChange={e=>setFilterJournee(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Caissier</label>
+              <select value={filterCaissier} onChange={e=>setFilterCaissier(e.target.value)}>
+                <option value="">Tous les caissiers</option>
+                {caissiers.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Zone</label>
+              <select value={filterZone} onChange={e=>setFilterZone(e.target.value)}>
+                <option value="">Toutes les zones</option>
+                <option value="bar">Bar</option>
+                <option value="terrasse">Terrasse</option>
+                <option value="liqueur">Liqueur / Cave</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Résumé par caissier</h3>
+            {Object.keys(parCaissier).length===0 ? <div className="empty">Aucune vente pour ce filtre</div> :
+              Object.entries(parCaissier).map(([nom,total])=>(
+                <div className="list-item" key={nom}>
+                  <span>{nom}</span><b>{fmtFCFA(total)}</b>
+                </div>
+              ))
+            }
+            <div className="row between" style={{marginTop:8, paddingTop:8, borderTop:"1px solid var(--border)"}}>
+              <b>Total journée</b><b style={{color:"var(--gold)"}}>{fmtFCFA(totalJour)}</b>
+            </div>
+            {ventesAnnuleesJour.length>0 && (
+              <div className="row between" style={{fontSize:12, color:"var(--red)", marginTop:4}}>
+                <span>Annulations</span><span>{ventesAnnuleesJour.length}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h3>Détail des ventes ({ventes.length})</h3>
+            {ventes.length===0 ? <div className="empty">Aucune vente enregistrée</div> :
+              ventes.map(v=>(
+                <div className="list-item" key={v.id}>
+                  <div>
+                    <div>{v.caissierNom} — <span style={{textTransform:"capitalize"}}>{v.zone}</span></div>
+                    <div className="meta">{v.date}</div>
+                    <div className="meta">{v.items.map(i=>i.nom+" ×"+i.qte).join(", ")}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <b>{fmtFCFA(v.total)}</b><br/>
+                    <button className="btn sm danger" style={{marginTop:4}} onClick={()=>annuler(v.id)}>Annuler</button>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </>
+      )}
+
+      {vue==="semaine" && (
+        <>
+          <div className="row between" style={{marginBottom:10}}>
+            <button className="btn sm secondary" onClick={()=>changerSemaine(-1)}>← Semaine préc.</button>
+            <button className="btn sm secondary" onClick={()=>changerSemaine(1)}>Semaine suiv. →</button>
+          </div>
+          <div className="journee-badge">📆 Du {formatDateFR(jours[0])} au {formatDateFR(jours[6])}</div>
+
+          {donneesJours.map(j=>(
+            <div className="card" key={j.jourIso}>
+              <div className="row between">
+                <span>{j.nom} {j.estAujourdhui && <span className="pill owner">AUJOURD'HUI</span>}</span>
+                <b style={{color: j.sansDonnees ? "var(--text-dim)" : "var(--green)"}}>
+                  {j.sansDonnees ? "—" : fmtFCFA(j.ca)}
+                </b>
+              </div>
+              {!j.sansDonnees && (
+                <div className="meta" style={{marginTop:4}}>
+                  🛒 {j.nbVentes} vente{j.nbVentes>1?"s":""}
+                  {j.annulations>0 && <span style={{color:"var(--red)"}}> · ❌ {j.annulations} annul.</span>}
+                  {(j.marge!==0 || j.depense!==0) && (
+                    <> · 💰 Marge {fmtFCFA(j.marge)} · 💸 {fmtFCFA(j.depense)} · 🏆 Net {fmtFCFA(j.net)}</>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div className="card" style={{borderColor:"var(--gold)"}}>
+            <h3>TOTAL SEMAINE</h3>
+            <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
+              <div>
+                <div className="meta">Chiffre d'affaires</div>
+                <div style={{fontSize:18, fontWeight:700, color:"var(--green)"}}>{fmtFCFA(totalSemaineCA)}</div>
+              </div>
+              <div>
+                <div className="meta">Ventes réalisées</div>
+                <div style={{fontSize:18, fontWeight:700, color:"var(--blue)"}}>{totalSemaineVentes}</div>
+              </div>
+              <div>
+                <div className="meta">Marge brute</div>
+                <div style={{fontSize:18, fontWeight:700}}>{fmtFCFA(totalSemaineMarge)}</div>
+              </div>
+              <div>
+                <div className="meta">Dépenses</div>
+                <div style={{fontSize:18, fontWeight:700, color:"var(--red)"}}>{fmtFCFA(totalSemaineDepense)}</div>
+              </div>
+              <div>
+                <div className="meta">🏆 Bénéfice net semaine</div>
+                <div style={{fontSize:19, fontWeight:800, color: beneficeNetSemaine>=0?"var(--green)":"var(--red)"}}>{fmtFCFA(beneficeNetSemaine)}</div>
+              </div>
+              <div>
+                <div className="meta">Annulations</div>
+                <div style={{fontSize:18, fontWeight:700, color:"var(--red)"}}>{totalSemaineAnnul}</div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : PRODUITS (ajout / édition / suppression — propriétaire)
+   ===================================================================== */
+function ProduitsModule({state, patchState}){
+  const [zone,setZone] = useState("bar");
+  const [form,setForm] = useState({nom:"", prix:"", prixAchat:"", stock:""});
+  const produits = state.produits.filter(p=>p.zone===zone);
+
+  const ajouter = ()=>{
+    if(!form.nom || !form.prix || Number(form.prix)<=0){ alert("Nom et prix de vente valides requis"); return; }
+    const p = {
+      id: uid(), nom: form.nom, zone,
+      prix: Number(form.prix),
+      prixAchat: Number(form.prixAchat)||0,
+      stock: Number(form.stock)||0,
+      seuilAlerte: 5
+    };
+    patchState(draft=>{ draft.produits.push(p); });
+    queueWrite("produits", p.id, p);
+    setForm({nom:"", prix:"", prixAchat:"", stock:""});
+  };
+
+  const modifierChamp = (id, champ, val)=>{
+    patchState(draft=>{
+      const p = draft.produits.find(x=>x.id===id);
+      if(p){ p[champ] = Number(val)||0; queueWrite("produits", p.id, p); }
+    });
+  };
+
+  const supprimer = (id)=>{
+    if(!confirm("Supprimer ce produit du catalogue ?")) return;
+    patchState(draft=>{ draft.produits = draft.produits.filter(p=>p.id!==id); });
+    queueDelete("produits", id);
+  };
+
+  return (
+    <div>
+      <div className="zone-toggle">
+        {["bar","terrasse","liqueur"].map(z=>(
+          <button key={z} className={zone===z?"active":""} onClick={()=>setZone(z)}>
+            {z==="bar"?"Bar":z==="terrasse"?"Terrasse":"Liqueur/Cave"}
+          </button>
+        ))}
+      </div>
+
+      <div className="card">
+        <h3>Ajouter un produit — {zone}</h3>
+        <div className="field"><label>Nom du produit</label>
+          <input value={form.nom} onChange={e=>setForm({...form,nom:e.target.value})}/>
+        </div>
+        <div className="field"><label>Prix de vente (F CFA)</label>
+          <input type="number" value={form.prix} placeholder="0" onChange={e=>setForm({...form,prix:e.target.value})}/>
+        </div>
+        <div className="field"><label>Prix d'achat (F CFA)</label>
+          <input type="number" value={form.prixAchat} placeholder="0" onChange={e=>setForm({...form,prixAchat:e.target.value})}/>
+        </div>
+        <div className="field"><label>Stock initial</label>
+          <input type="number" value={form.stock} placeholder="0" onChange={e=>setForm({...form,stock:e.target.value})}/>
+        </div>
+        <button className="btn" onClick={ajouter}>Ajouter le produit</button>
+      </div>
+
+      <div className="card">
+        <h3>Catalogue — {zone} ({produits.length})</h3>
+        {produits.length===0 ? <div className="empty">Aucun produit dans cette zone</div> :
+          produits.map(p=>(
+            <div className="list-item" key={p.id} style={{flexWrap:"wrap"}}>
+              <div style={{marginBottom:6}}>
+                <div>{p.nom} {(p.stock||0)<=(p.seuilAlerte||5) && <span className="pill" style={{background:"#3a1212", color:"var(--red)"}}>Stock bas</span>}</div>
+                <div className="meta">Marge unitaire : {fmtFCFA((p.prix||0)-(p.prixAchat||0))}</div>
+              </div>
+              <div className="row" style={{gap:6, width:"100%", flexWrap:"wrap"}}>
+                <div>
+                  <label style={{fontSize:10, color:"var(--text-dim)"}}>Vente</label>
+                  <input type="number" defaultValue={p.prix}
+                    style={{width:78, padding:6, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text)", textAlign:"right", display:"block"}}
+                    onBlur={e=>modifierChamp(p.id,"prix", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{fontSize:10, color:"var(--text-dim)"}}>Achat</label>
+                  <input type="number" defaultValue={p.prixAchat||0}
+                    style={{width:78, padding:6, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text)", textAlign:"right", display:"block"}}
+                    onBlur={e=>modifierChamp(p.id,"prixAchat", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{fontSize:10, color:"var(--text-dim)"}}>Stock</label>
+                  <input type="number" defaultValue={p.stock||0}
+                    style={{width:70, padding:6, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text)", textAlign:"right", display:"block"}}
+                    onBlur={e=>modifierChamp(p.id,"stock", e.target.value)} />
+                </div>
+                <button className="btn sm danger" style={{alignSelf:"flex-end"}} onClick={()=>supprimer(p.id)}>Suppr.</button>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : DASHBOARD / KPI (propriétaire)
+   ===================================================================== */
+function DashboardModule({state, journee}){
+  const toutesVentes = (state.ventes || []).filter(v=>!v.annulee);
+  const ventesJour = toutesVentes.filter(v=>v.journee===journee);
+  const { ca: caJour } = calculerCAEtMarge(ventesJour);
+
+  const { debut: lundiSemaine, fin: dimancheSemaine } = semaineDe(journee);
+  const ventesSemaine = toutesVentes.filter(v=> v.journee>=lundiSemaine && v.journee<=dimancheSemaine);
+  const { ca: caSemaine, marge: margeSemaine } = calculerCAEtMarge(ventesSemaine);
+  const estDimanche = journee===dimancheSemaine;
+
+  const moisCourant = moisDe(journee);
+  const ventesMois = toutesVentes.filter(v=> moisDe(v.journee)===moisCourant);
+  const { ca: caMois, marge: margeMois } = calculerCAEtMarge(ventesMois);
+
+  const avoirsJour = (state.avoirs||[]).filter(a=>a.journee===journee);
+  const totalAvoirs = avoirsJour.reduce((s,a)=>s+a.montant,0);
+  const caissiersActifs = state.users.filter(u=>u.role==="caissier" && u.actif).length;
+  const cloture = state.clotures[journee];
+
+  const valeurStock = state.produits.reduce((s,p)=>s+(p.stock||0)*(p.prixAchat||0),0);
+  const produitsStockBas = state.produits.filter(p=>(p.stock||0)<=(p.seuilAlerte||5));
+
+  const qtyParProduit = {};
+  ventesJour.forEach(v=>v.items.forEach(i=>{ qtyParProduit[i.nom] = (qtyParProduit[i.nom]||0) + i.qte; }));
+  const top5 = Object.entries(qtyParProduit).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxQty = top5.length ? top5[0][1] : 1;
+
+  return (
+    <div>
+      <div className="journee-badge">📅 {formatDateFR(journee)}</div>
+
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <span className="kpi-label">CA du jour</span>
+          <span className="kpi-value">{fmtFCFA(caJour)}</span>
+          <span className="kpi-sub">{ventesJour.length} transaction{ventesJour.length>1?"s":""}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Avoirs remis</span>
+          <span className="kpi-value">{fmtFCFA(totalAvoirs)}</span>
+          <span className="kpi-sub">{avoirsJour.length} avoir{avoirsJour.length>1?"s":""}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Caissiers actifs</span>
+          <span className="kpi-value">{caissiersActifs}</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Statut clôture</span>
+          <span className="kpi-value" style={{fontSize:14, color: cloture&&cloture.cloture ? "var(--green)":"var(--red)"}}>
+            {cloture && cloture.cloture ? "Clôturée" : "En cours"}
+          </span>
+        </div>
+      </div>
+
+      <div className="card" style={estDimanche ? {borderColor:"var(--gold)"} : {}}>
+        <h3>{estDimanche ? "📆 Récapitulatif hebdomadaire (dimanche)" : "Semaine en cours"}</h3>
+        <div className="meta" style={{marginBottom:8}}>Du {formatDateFR(lundiSemaine)} au {formatDateFR(dimancheSemaine)}</div>
+        <div className="row between"><span>CA global de la semaine</span><b>{fmtFCFA(caSemaine)}</b></div>
+        <div className="row between"><span>Marge bénéficiaire</span><b style={{color:"var(--green)"}}>{fmtFCFA(margeSemaine)}</b></div>
+      </div>
+
+      <div className="card">
+        <h3>CA mensuel</h3>
+        <div className="meta" style={{marginBottom:8}}>Mois du {moisCourant}</div>
+        <div className="row between"><span>CA global du mois</span><b>{fmtFCFA(caMois)}</b></div>
+        <div className="row between"><span>Marge bénéficiaire</span><b style={{color:"var(--green)"}}>{fmtFCFA(margeMois)}</b></div>
+      </div>
+
+      <div className="kpi-grid">
+        <div className="kpi-card">
+          <span className="kpi-label">Valeur du stock</span>
+          <span className="kpi-value">{fmtFCFA(valeurStock)}</span>
+          <span className="kpi-sub">au prix d'achat</span>
+        </div>
+        <div className="kpi-card">
+          <span className="kpi-label">Stock bas</span>
+          <span className="kpi-value" style={{color: produitsStockBas.length>0 ? "var(--red)":"var(--gold)"}}>{produitsStockBas.length}</span>
+          <span className="kpi-sub">produit{produitsStockBas.length>1?"s":""} à réapprovisionner</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Top 5 produits vendus aujourd'hui</h3>
+        {top5.length===0 ? <div className="empty">Aucune vente aujourd'hui</div> :
+          top5.map(([nom,qty])=>(
+            <div key={nom} style={{marginBottom:10}}>
+              <div className="row between" style={{fontSize:12.5, marginBottom:3}}>
+                <span>{nom}</span><span>{qty}</span>
+              </div>
+              <div style={{background:"var(--bg3)", borderRadius:6, height:8}}>
+                <div style={{width:(qty/maxQty*100)+"%", background:"var(--gold)", height:8, borderRadius:6}}></div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+/* =====================================================================
+   MODULE : PROPRIETAIRE (gestion utilisateurs + paramètres)
+   ===================================================================== */
+/* =====================================================================
+   MODULE : EXPORT CSV & RAPPORT WHATSAPP
+   ===================================================================== */
+function ExportModule({state, settings, journee}){
+  const [debut,setDebut] = useState(journee);
+  const [fin,setFin] = useState(journee);
+
+  const exporterPeriode = ()=>{
+    const ventes = (state.ventes||[]).filter(v=> v.journee>=debut && v.journee<=fin);
+    if(ventes.length===0){ alert("Aucune vente sur cette période."); return; }
+    exporterVentesCSV(ventes, `ventes_${debut}_a_${fin}.csv`);
+  };
+
+  const exporterTout = ()=>{
+    if((state.ventes||[]).length===0){ alert("Aucune vente enregistrée."); return; }
+    exporterVentesCSV(state.ventes, `ventes_historique_complet.csv`);
+  };
+
+  const rapportApercu = genererRapportTexte(journee, state, settings);
+
+  return (
+    <div>
+      <div className="card">
+        <h3>📊 Export des ventes (CSV)</h3>
+        <div className="field">
+          <label>Période — du</label>
+          <input type="date" value={debut} onChange={e=>setDebut(e.target.value)}/>
+        </div>
+        <div className="field">
+          <label>au</label>
+          <input type="date" value={fin} onChange={e=>setFin(e.target.value)}/>
+        </div>
+        <button className="btn" onClick={exporterPeriode}>⬇️ Exporter la période</button>
+        <button className="btn secondary" style={{marginTop:8}} onClick={exporterTout}>⬇️ Exporter tout l'historique</button>
+        <p style={{fontSize:11, color:"var(--text-dim)", marginTop:8}}>
+          Le fichier CSV s'ouvre directement dans Excel ou Google Sheets (une ligne par article vendu).
+        </p>
+      </div>
+
+      <div className="card">
+        <h3>📤 Rapport journalier WhatsApp</h3>
+        <p style={{fontSize:12, color:"var(--text-dim)"}}>Aperçu du rapport pour la journée du {formatDateFR(journee)} :</p>
+        <div className="ticket" style={{whiteSpace:"pre-wrap", fontSize:12.5}}>{rapportApercu}</div>
+        <button className="btn" style={{marginTop:10}} onClick={()=>envoyerRapportWhatsApp(settings.whatsappRapport, rapportApercu)}>
+          💬 Envoyer sur WhatsApp
+        </button>
+        {!settings.whatsappRapport && (
+          <p style={{fontSize:11, color:"var(--red)", marginTop:6}}>
+            Aucun numéro configuré — renseigne-le dans Réglages → Rapport journalier WhatsApp.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RapportMensuelModule({state, settings}){
+  const [mois,setMois] = useState(new Date().toISOString().slice(0,7));
+
+  const toutesVentes = state.ventes || [];
+  const journeesSet = new Set([
+    ...toutesVentes.filter(v=>!v.annulee && moisDe(v.journee)===mois).map(v=>v.journee),
+    ...Object.keys(state.clotures||{}).filter(j=>moisDe(j)===mois)
+  ]);
+  const journees = [...journeesSet].sort();
+
+  const lignesJours = journees.map(j=>{
+    const ventesJ = toutesVentes.filter(v=>v.journee===j && !v.annulee);
+    const { ca, marge } = calculerCAEtMarge(ventesJ);
+    const cl = state.clotures[j];
+    const depense = cl ? (cl.depenseTerrasse||0)+(cl.depenseBar||0)+(cl.depenseCave||0) : 0;
+    return { jour:j, ca, marge, depense, net: marge-depense };
+  });
+
+  const totalCA = lignesJours.reduce((s,l)=>s+l.ca,0);
+  const totalDepense = lignesJours.reduce((s,l)=>s+l.depense,0);
+  const totalMarge = lignesJours.reduce((s,l)=>s+l.marge,0);
+  const totalNet = totalMarge - totalDepense;
+  const libelleMois = new Date(mois+"-01T00:00:00").toLocaleDateString('fr-FR',{month:'long', year:'numeric'});
+
+  const genererPDF = ()=>{
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      alert("Librairie PDF indisponible — vérifie ta connexion internet et réessaie.");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = 16;
+    doc.setFont('helvetica','bold'); doc.setFontSize(16);
+    doc.text(settings.nomEtablissement || "BURKINA AMBIANCE", 105, y, {align:"center"}); y+=8;
+    doc.setFont('helvetica','normal'); doc.setFontSize(11);
+    doc.text("Rapport mensuel — " + libelleMois, 105, y, {align:"center"}); y+=10;
+
+    doc.setFontSize(11);
+    doc.text("Chiffre d'affaires : " + fmtFCFA(totalCA), 14, y); y+=7;
+    doc.text("Dépenses : " + fmtFCFA(totalDepense), 14, y); y+=7;
+    doc.text("Marge brute : " + fmtFCFA(totalMarge), 14, y); y+=7;
+    doc.setFont('helvetica','bold');
+    doc.text("Bénéfice net : " + fmtFCFA(totalNet), 14, y); y+=10;
+    doc.setFont('helvetica','normal');
+
+    doc.setFontSize(10);
+    doc.text("Détail journalier", 14, y); y+=6;
+    doc.setFontSize(9);
+    doc.text("Date", 14, y); doc.text("CA", 80, y); doc.text("Dépenses", 115, y); doc.text("Marge", 155, y); doc.text("Net", 182, y);
+    y+=3; doc.line(14,y,196,y); y+=5;
+    lignesJours.forEach(l=>{
+      if(y>282){ doc.addPage(); y=15; }
+      doc.text(l.jour, 14, y);
+      doc.text(fmtFCFA(l.ca), 80, y);
+      doc.text(fmtFCFA(l.depense), 115, y);
+      doc.text(fmtFCFA(l.marge), 155, y);
+      doc.text(fmtFCFA(l.net), 182, y);
+      y+=5;
+    });
+    doc.save("rapport-mensuel-"+mois+".pdf");
+  };
+
+  return (
+    <div>
+      <div className="field">
+        <label>Mois</label>
+        <input type="month" value={mois} onChange={e=>setMois(e.target.value)} />
+      </div>
+      <div className="card">
+        <h3>📊 Résumé — {libelleMois}</h3>
+        <div className="row between" style={{marginBottom:6}}><span>Chiffre d'affaires (CA)</span><b>{fmtFCFA(totalCA)}</b></div>
+        <div className="row between" style={{marginBottom:6}}><span>Dépenses</span><b style={{color:"var(--red)"}}>{fmtFCFA(totalDepense)}</b></div>
+        <div className="row between" style={{marginBottom:6}}><span>Marge brute</span><b>{fmtFCFA(totalMarge)}</b></div>
+        <div className="row between" style={{borderTop:"1px dashed var(--border)", paddingTop:6}}>
+          <span>Bénéfice net</span><b className="gold">{fmtFCFA(totalNet)}</b>
+        </div>
+        <button className="btn" style={{marginTop:10}} onClick={genererPDF}>📄 Enregistrer en PDF</button>
+      </div>
+      <div className="card">
+        <h3>Détail par jour</h3>
+        {lignesJours.length===0 ? <div className="empty">Aucune donnée pour ce mois</div> :
+          lignesJours.map(l=>(
+            <div className="list-item" key={l.jour}>
+              <div><div>{formatDateFR(l.jour)}</div><div className="meta">Dépenses : {fmtFCFA(l.depense)} • Marge : {fmtFCFA(l.marge)}</div></div>
+              <b>{fmtFCFA(l.ca)}</b>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+function OwnerModule({state, patchState, settings, patchSettings, currentUser, journee, shopId, subscription}){
+  const [tab,setTab] = useState("users");
+  const [codeCopie,setCodeCopie] = useState(false);
+  const copierCode = ()=>{
+    if(navigator.clipboard) navigator.clipboard.writeText(shopId).then(()=>{ setCodeCopie(true); setTimeout(()=>setCodeCopie(false),1500); });
+  };
+  const [form,setForm] = useState({nom:"", role:"caissier", zones:["bar"], pin:""});
+  const toggleZoneForm = (z)=>{
+    setForm(f=>{
+      const has = f.zones.includes(z);
+      const zones = has ? f.zones.filter(x=>x!==z) : [...f.zones, z];
+      return {...f, zones: zones.length? zones : [z]};
+    });
+  };
+  const [heureArret,setHeureArret] = useState(settings.heureArret ?? 2);
+  const [nomEtab,setNomEtab] = useState(settings.nomEtablissement || "Burkina Ambiance");
+  const [adresse,setAdresse] = useState(settings.adresse || "");
+  const [logoDataUrl,setLogoDataUrl] = useState(settings.logoDataUrl || "");
+  const [piedTicket,setPiedTicket] = useState(settings.piedTicket || "Merci de votre confiance !");
+  const [copiesTicket,setCopiesTicket] = useState(settings.copiesTicket || 1);
+  const [theme,setTheme] = useState(settings.theme || "sombre");
+  const [whatsappRapport,setWhatsappRapport] = useState(settings.whatsappRapport || "");
+  const [fideliteSeuil,setFideliteSeuil] = useState(settings.fideliteSeuil || 10);
+
+  const choisirLogo = (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=> setLogoDataUrl(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const creerUser = async ()=>{
+    if(!form.nom || form.pin.length<4){ alert("Nom et PIN (4 chiffres min.) requis"); return; }
+    const hash = await hashPin(form.pin);
+    const user = {id: uid(), nom: form.nom, role: form.role, zones: form.zones, pinHash: hash, actif:true};
+    patchState(draft=>{ draft.users.push(user); });
+    queueWrite("users", user.id, {...user, pinHash: hash});
+    setForm({nom:"", role:"caissier", zones:["bar"], pin:""});
+  };
+
+  const toggleActif = (id)=>{
+    patchState(draft=>{
+      const u = draft.users.find(x=>x.id===id);
+      if(u){ u.actif = !u.actif; queueWrite("users", u.id, u); }
+    });
+  };
+
+  const supprimerUser = (id)=>{
+    if(!confirm("Supprimer cet utilisateur ?")) return;
+    patchState(draft=>{ draft.users = draft.users.filter(u=>u.id!==id); });
+    queueDelete("users", id);
+  };
+
+  const sauverParams = ()=>{
+    patchSettings({
+      heureArret: Number(heureArret), nomEtablissement: nomEtab,
+      adresse, logoDataUrl, piedTicket: piedTicket.split("\n").slice(0,3).join("\n"), copiesTicket: Number(copiesTicket),
+      theme, whatsappRapport: whatsappRapport.replace(/[^\d+]/g,""), fideliteSeuil: Number(fideliteSeuil)||10
+    });
+    alert("Paramètres enregistrés.");
+  };
+
+  return (
+    <div>
+      <div className="zone-toggle" style={{flexWrap:"wrap"}}>
+        <button className={tab==="users"?"active":""} onClick={()=>setTab("users")}>Utilisateurs</button>
+        <button className={tab==="params"?"active":""} onClick={()=>setTab("params")}>Paramètres</button>
+        <button className={tab==="reappro"?"active":""} onClick={()=>setTab("reappro")}>Stock</button>
+        <button className={tab==="dettes"?"active":""} onClick={()=>setTab("dettes")}>Dettes</button>
+        <button className={tab==="classement"?"active":""} onClick={()=>setTab("classement")}>Équipe</button>
+        <button className={tab==="rapportmensuel"?"active":""} onClick={()=>setTab("rapportmensuel")}>Rapport PDF</button>
+        <button className={tab==="avoirs"?"active":""} onClick={()=>setTab("avoirs")}>Avoirs</button>
+        <button className={tab==="global"?"active":""} onClick={()=>setTab("global")}>Clôtures</button>
+        <button className={tab==="export"?"active":""} onClick={()=>setTab("export")}>Export</button>
+        <button className={tab==="abonnement"?"active":""} onClick={()=>setTab("abonnement")}>Abonnement</button>
+      </div>
+
+      {tab==="reappro" && (
+        <ReapproModule state={state} patchState={patchState} currentUser={currentUser} />
+      )}
+
+      {tab==="dettes" && (
+        <DettesModule state={state} patchState={patchState} settings={settings} />
+      )}
+
+      {tab==="classement" && (
+        <ClassementModule state={state} settings={settings} />
+      )}
+
+      {tab==="rapportmensuel" && (
+        <RapportMensuelModule state={state} settings={settings} />
+      )}
+
+      {tab==="users" && (
+        <>
+          <div className="card">
+            <h3>Ajouter un utilisateur</h3>
+            <div className="field"><label>Nom</label>
+              <input value={form.nom} onChange={e=>setForm({...form,nom:e.target.value})}/>
+            </div>
+            <div className="field"><label>Rôle</label>
+              <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>
+                <option value="caissier">Caissier</option>
+                <option value="gerant">Gérant</option>
+                <option value="owner">Propriétaire</option>
+              </select>
+            </div>
+            <div className="field"><label>Accès zone (le caissier ne verra que ces zones)</label>
+              <div className="discount-chips">
+                {[{k:"bar",l:"Bar"},{k:"terrasse",l:"Terrasse"},{k:"liqueur",l:"Cave/Liqueur"}].map(z=>(
+                  <button key={z.k} type="button" className={form.zones.includes(z.k)?"active":""} onClick={()=>toggleZoneForm(z.k)}>
+                    {z.l}
+                  </button>
+                ))}
+              </div>
+              <p style={{fontSize:11, color:"var(--text-dim)", marginTop:4}}>
+                Sélectionne une ou plusieurs zones. Pour le gérant/propriétaire, laisse toutes les zones cochées.
+              </p>
+            </div>
+            <div className="field"><label>PIN (4 à 6 chiffres)</label>
+              <input type="password" inputMode="numeric" maxLength="6" value={form.pin} onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,"")})}/>
+            </div>
+            <button className="btn" onClick={creerUser}>Créer l'utilisateur</button>
+          </div>
+
+          <div className="card">
+            <h3>Liste des utilisateurs</h3>
+            {state.users.length===0 ? <div className="empty">Aucun utilisateur</div> :
+              state.users.map(u=>(
+                <div className="list-item" key={u.id}>
+                  <div>
+                    <div>{u.nom} <span className={"pill "+u.role}>{u.role}</span></div>
+                    <div className="meta">Zones : {(u.zones && u.zones.length ? u.zones.join(", ") : (u.zone||"toutes"))} {!u.actif && "• désactivé"}</div>
+                  </div>
+                  <div className="row" style={{gap:6}}>
+                    <button className="btn sm secondary" onClick={()=>toggleActif(u.id)}>{u.actif?"Désactiver":"Activer"}</button>
+                    <button className="btn sm danger" onClick={()=>supprimerUser(u.id)}>Suppr.</button>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>Paramètres généraux</h3>
+          <div className="field">
+            <label>Nom de l'établissement</label>
+            <input value={nomEtab} onChange={e=>setNomEtab(e.target.value)}/>
+          </div>
+          <div className="field">
+            <label>Adresse de l'établissement</label>
+            <input value={adresse} placeholder="Ex : Ouagadougou, Burkina Faso" onChange={e=>setAdresse(e.target.value)}/>
+          </div>
+          <div className="field">
+            <label>Heure d'arrêt de compte (journée comptable)</label>
+            <select value={heureArret} onChange={e=>setHeureArret(e.target.value)}>
+              {Array.from({length:12}, (_,i)=>i).map(h=>(
+                <option key={h} value={h}>{h}h00</option>
+              ))}
+            </select>
+            <p style={{fontSize:12, color:"var(--text-dim)", marginTop:6}}>
+              Toute vente ou dépense enregistrée entre 00h00 et {heureArret}h00 sera automatiquement
+              rattachée à la journée comptable de la veille. Exemple : arrêt à 2h → une vente à 1h30
+              le mardi matin compte encore dans la journée de lundi.
+            </p>
+          </div>
+          <button className="btn" onClick={sauverParams}>Enregistrer les paramètres</button>
+        </div>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>🎨 Apparence</h3>
+          <div className="field">
+            <label>Thème de l'application</label>
+            <div className="discount-chips">
+              <button className={theme==="sombre"?"active":""} onClick={()=>{setTheme("sombre"); patchSettings({theme:"sombre"});}}>🌙 Sombre (actuel)</button>
+              <button className={theme==="clair"?"active":""} onClick={()=>{setTheme("clair"); patchSettings({theme:"clair"});}}>☀️ Clair</button>
+              <button className={theme==="neon"?"active":""} onClick={()=>{setTheme("neon"); patchSettings({theme:"neon"});}}>🌈 Néon sombre</button>
+            </div>
+            <p style={{fontSize:11, color:"var(--text-dim)", marginTop:4}}>Le changement s'applique immédiatement, sur tout l'écran.</p>
+          </div>
+        </div>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>🖼️ Logo du commerce</h3>
+          {logoDataUrl && (
+            <div className="center" style={{textAlign:"center", marginBottom:10}}>
+              <img src={logoDataUrl} style={{width:90, height:90, objectFit:"cover", borderRadius:12, border:"1px solid var(--border)"}} />
+            </div>
+          )}
+          <p style={{fontSize:12, color:"var(--text-dim)", marginBottom:10}}>
+            Le logo apparaîtra en en-tête de vos tickets (impression navigateur et imprimante thermique BLE).
+          </p>
+          <label className="btn secondary" style={{display:"block", textAlign:"center", marginBottom:8}}>
+            📁 Choisir une image (PNG / JPG)
+            <input type="file" accept="image/png,image/jpeg" style={{display:"none"}} onChange={choisirLogo} />
+          </label>
+          {logoDataUrl && (
+            <button className="btn danger" onClick={()=>setLogoDataUrl("")}>🗑️ Supprimer le logo</button>
+          )}
+        </div>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>🖨️ Impression</h3>
+          <div className="field">
+            <label>Nombre de copies par ticket</label>
+            <div className="discount-chips">
+              {[1,2,3,4].map(n=>(
+                <button key={n} className={Number(copiesTicket)===n?"active":""} onClick={()=>setCopiesTicket(n)}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <label>Pied de ticket personnalisé (3 lignes max)</label>
+            <textarea rows="3" value={piedTicket}
+              style={{width:"100%", padding:10, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, color:"var(--text)", fontFamily:"inherit", fontSize:14}}
+              onChange={e=>{
+                const lignes = e.target.value.split("\n").slice(0,3);
+                setPiedTicket(lignes.join("\n"));
+              }} />
+            <p style={{fontSize:11, color:"var(--text-dim)", marginTop:4}}>Aperçu : {piedTicket.split("\n").filter(Boolean).length}/3 ligne(s)</p>
+          </div>
+          <div className="ticket" style={{marginTop:8}}>
+            {piedTicket.split("\n").map((l,i)=> l && <p key={i} className="center">{l}</p>)}
+          </div>
+          <button className="btn" style={{marginTop:10}} onClick={sauverParams}>Enregistrer les paramètres</button>
+        </div>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>📤 Rapport journalier WhatsApp</h3>
+          <div className="field">
+            <label>Numéro WhatsApp (avec indicatif pays, ex : +22670000000)</label>
+            <input value={whatsappRapport} placeholder="+226XXXXXXXX" onChange={e=>setWhatsappRapport(e.target.value)}/>
+          </div>
+          <p style={{fontSize:11, color:"var(--text-dim)"}}>
+            Ce numéro sera utilisé par le bouton "Envoyer sur WhatsApp" (onglet Export) pour préparer le rapport du jour.
+            Par sécurité, WhatsApp exige toujours une confirmation manuelle avant l'envoi (aucun message n'est envoyé automatiquement en arrière-plan).
+          </p>
+          <button className="btn" style={{marginTop:8}} onClick={sauverParams}>Enregistrer les paramètres</button>
+        </div>
+      )}
+
+      {tab==="params" && (
+        <div className="card">
+          <h3>🎁 Programme de fidélité</h3>
+          <div className="field">
+            <label>Offre due tous les X achats d'un même client</label>
+            <input type="number" min="2" value={fideliteSeuil} onChange={e=>setFideliteSeuil(e.target.value)} />
+          </div>
+          <p style={{fontSize:11, color:"var(--text-dim)"}}>
+            Dès qu'un client (identifié par son numéro de téléphone) atteint ce nombre d'achats, il apparaît comme "Offre due" dans l'onglet Équipe → Fidélité.
+          </p>
+          <button className="btn" style={{marginTop:8}} onClick={sauverParams}>Enregistrer les paramètres</button>
+        </div>
+      )}
+
+      {tab==="export" && (
+        <ExportModule state={state} settings={settings} journee={journee} />
+      )}
+
+      {tab==="avoirs" && (
+        <AvoirsModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} settings={settings} />
+      )}
+
+      {tab==="global" && (
+        <div className="card">
+          <h3>Vue globale (toutes journées)</h3>
+          {Object.keys(state.clotures).length===0 ? <div className="empty">Aucune clôture enregistrée</div> :
+            Object.entries(state.clotures).sort((a,b)=>b[0].localeCompare(a[0])).map(([jour,c])=>{
+              const totalRecette = (c.recetteTerrasse||0)+(c.recetteBar||0)+(c.recetteCave||0);
+              const totalDepense = (c.depenseTerrasse||0)+(c.depenseBar||0)+(c.depenseCave||0);
+              return (
+                <div className="list-item" key={jour}>
+                  <div>
+                    <div>{formatDateFR(jour)}</div>
+                    <div className="meta">{c.cloture? ("Clôturé par "+c.cloturePar) : "En cours"}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{color:"var(--green)"}}>{fmtFCFA(totalRecette)}</div>
+                    <div style={{color:"var(--red)", fontSize:11}}>-{fmtFCFA(totalDepense)}</div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {tab==="abonnement" && (
+        <div className="card">
+          <h3>Abonnement de l'établissement</h3>
+          <p className="meta">Ce code identifie ton bar. Donne-le à ton gérant/caissier pour qu'ils rejoignent
+            le même bar depuis leur propre téléphone (menu "Rejoindre un bar existant" au premier lancement).</p>
+          <div style={{display:"flex", alignItems:"center", gap:8, margin:"10px 0"}}>
+            <code style={{background:"var(--bg3)", padding:"6px 10px", borderRadius:6, fontSize:14}}>{shopId}</code>
+            <button className="btn secondary" onClick={copierCode}>{codeCopie?"Copié !":"Copier"}</button>
+          </div>
+          {subscription ? (
+            <>
+              <div className="meta">Plan : <b>{subscription.plan||"—"}</b></div>
+              <div className="meta">Statut : <b style={{color: subscription.actif===false?"var(--red)":"var(--green)"}}>
+                {subscription.actif===false ? "Suspendu" : "Actif"}</b></div>
+              <div className="meta">Expire le : {subscription.dateExpiration ? formatDateFR(subscription.dateExpiration.slice(0,10)) : "—"}</div>
+              <p style={{marginTop:10, fontSize:13, color:"var(--text-dim)"}}>Pour renouveler ou changer de plan, contacte Digitale Solution au {subscription.contactWhatsapp||"22678548317"}.</p>
+            </>
+          ) : <div className="empty">Informations d'abonnement indisponibles hors-ligne.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =====================================================================
+   ÉCRAN DE CONFIGURATION DU BAR (multi-tenant)
+   Au tout premier lancement sur un appareil, on doit savoir à quel bar
+   (shopId) cet appareil appartient : soit on crée un nouveau bar, soit on
+   rejoint un bar déjà existant (autre caissier/gérant du même bar).
+   ===================================================================== */
+function ShopSetupScreen({onResolu}){
+  const [mode,setMode] = useState(null); // null | "creer" | "rejoindre"
+  const [nom,setNom] = useState("");
+  const [codeSaisi,setCodeSaisi] = useState("");
+  const [busy,setBusy] = useState(false);
+  const [erreur,setErreur] = useState("");
+
+  const creerBar = async ()=>{
+    if(!nom.trim()){ setErreur("Indique le nom de ton bar/établissement."); return; }
+    setBusy(true); setErreur("");
+    const id = genererShopId();
+    setShopIdActif(id);
+    if(firebaseOK){
+      const dansTrenteJours = new Date(); dansTrenteJours.setDate(dansTrenteJours.getDate()+30);
+      await shopDocRef().set({
+        nomEtablissement: nom.trim(), plan:"essai", actif:true,
+        dateCreation: new Date().toISOString(), dateExpiration: dansTrenteJours.toISOString(),
+        contactWhatsapp: "22678548317",
+      }, {merge:true}).catch(()=>{});
+    }
+    localStorage.setItem(DEVICE_SHOP_KEY, id);
+    onResolu(id);
+  };
+
+  const rejoindreBar = async ()=>{
+    const id = codeSaisi.trim();
+    if(!id){ setErreur("Entre le code du bar fourni par ton gérant/propriétaire."); return; }
+    setBusy(true); setErreur("");
+    if(firebaseOK){
+      try{
+        const doc = await db.collection("shops").doc(id).get();
+        if(!doc.exists){ setErreur("Aucun bar ne correspond à ce code. Vérifie-le auprès du propriétaire."); setBusy(false); return; }
+      }catch(e){ setErreur("Impossible de vérifier le code (connexion instable)."); setBusy(false); return; }
+    }
+    setShopIdActif(id);
+    localStorage.setItem(DEVICE_SHOP_KEY, id);
+    onResolu(id);
+  };
+
+  return (
+    <div className="login-wrap">
+      <div className="brand"><h1>BURKINA AMBIANCE</h1><p>Configuration de l'établissement</p></div>
+      {mode===null && (
+        <div style={{display:"flex", flexDirection:"column", gap:12, width:"100%", maxWidth:320}}>
+          <button className="btn" onClick={()=>setMode("creer")}>➕ Créer un nouveau bar</button>
+          <button className="btn secondary" onClick={()=>setMode("rejoindre")}>🔗 Rejoindre un bar existant</button>
+        </div>
+      )}
+      {mode==="creer" && (
+        <div style={{display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320}}>
+          <input placeholder="Nom du bar / établissement" value={nom} onChange={e=>setNom(e.target.value)} />
+          {erreur && <div style={{color:"var(--red)", fontSize:13}}>{erreur}</div>}
+          <button className="btn" disabled={busy} onClick={creerBar}>{busy?"...":"Créer ce bar"}</button>
+          <button className="btn secondary" onClick={()=>{setMode(null); setErreur("");}}>Retour</button>
+        </div>
+      )}
+      {mode==="rejoindre" && (
+        <div style={{display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320}}>
+          <input placeholder="Code du bar (ex: bar-a1b2c3)" value={codeSaisi} onChange={e=>setCodeSaisi(e.target.value)} />
+          {erreur && <div style={{color:"var(--red)", fontSize:13}}>{erreur}</div>}
+          <button className="btn" disabled={busy} onClick={rejoindreBar}>{busy?"...":"Rejoindre"}</button>
+          <button className="btn secondary" onClick={()=>{setMode(null); setErreur("");}}>Retour</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Écran de blocage quand l'abonnement du bar est expiré ou suspendu. */
+function AbonnementExpireScreen({subscription, shopId, onOuvrirDevPanel}){
+  const contact = (subscription && subscription.contactWhatsapp) || "22678548317";
+  const demanderAcces = ()=>{
+    const code = prompt("Code d'accès développeur :");
+    if(code===null) return;
+    if(code.trim() !== DEV_PANEL_PIN){ alert("Code incorrect."); return; }
+    onOuvrirDevPanel();
+  };
+  return (
+    <div className="login-wrap">
+      <div className="brand"><h1>ABONNEMENT INACTIF</h1><p>Accès suspendu</p></div>
+      <div style={{textAlign:"center", maxWidth:320, color:"var(--text-dim)", fontSize:14, lineHeight:1.5}}>
+        <p>L'abonnement de cet établissement est expiré ou suspendu.</p>
+        {subscription && subscription.dateExpiration && (
+          <p>Expiré depuis le {formatDateFR(subscription.dateExpiration.slice(0,10))}.</p>
+        )}
+        <p>Contacte Digitale Solution pour réactiver l'accès.</p>
+      </div>
+      <a className="btn" style={{background:"var(--green)", color:"#fff", textDecoration:"none"}}
+        href={"https://wa.me/"+contact+"?text="+encodeURIComponent("Bonjour, je souhaite réactiver l'abonnement de mon bar (code: "+shopId+").")}
+        target="_blank" rel="noreferrer">💬 Contacter sur WhatsApp</a>
+      <button className="btn secondary" onClick={demanderAcces}>Accès développeur</button>
+    </div>
+  );
+}
+
+/* Panneau développeur : vue d'ensemble et gestion des abonnements de tous les bars. */
+function DevPanel({shopId, subscription, onFermer}){
+  const [bars,setBars] = useState(null);
+
+  useEffect(()=>{
+    if(!firebaseOK) return;
+    const unsub = db.collection("shops").onSnapshot(snap=>{
+      setBars(snap.docs.map(d=>({id:d.id, ...d.data()})));
+    }, err=>console.warn("Sync panneau développeur indisponible :", err.message));
+    return unsub;
+  },[]);
+
+  const majBar = (id, patch)=>{
+    if(!firebaseOK) return;
+    db.collection("shops").doc(id).set(patch, {merge:true}).catch(()=>{});
+  };
+  const prolonger = (bar, jours)=>{
+    const base = (bar.dateExpiration && new Date(bar.dateExpiration) > new Date()) ? new Date(bar.dateExpiration) : new Date();
+    base.setDate(base.getDate()+jours);
+    majBar(bar.id, {dateExpiration: base.toISOString(), actif:true});
+  };
+
+  return (
+    <div className="content" style={{maxWidth:600, margin:"0 auto"}}>
+      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14}}>
+        <h3 style={{margin:0}}>🛠️ Panneau développeur</h3>
+        <button className="btn secondary" onClick={onFermer}>Fermer</button>
+      </div>
+      <div className="card" style={{marginBottom:14}}>
+        <div className="meta">Bar courant (cet appareil)</div>
+        <div><b>{shopId}</b></div>
+      </div>
+      {!firebaseOK && <div className="card">Firestore indisponible hors-ligne : le panneau développeur nécessite une connexion.</div>}
+      {firebaseOK && bars===null && <div className="card">Chargement des bars…</div>}
+      {firebaseOK && bars && bars.length===0 && <div className="card">Aucun bar enregistré pour le moment.</div>}
+      {firebaseOK && bars && bars.map(bar=>{
+        const expire = bar.actif===false || (bar.dateExpiration && new Date(bar.dateExpiration) < new Date());
+        return (
+          <div className="card" key={bar.id} style={{marginBottom:10}}>
+            <div style={{display:"flex", justifyContent:"space-between"}}>
+              <b>{bar.nomEtablissement || "(sans nom)"}</b>
+              <span className={"pill "+(expire?"danger":"ok")}>{expire?"Expiré":"Actif"}</span>
+            </div>
+            <div className="meta">Code : {bar.id}</div>
+            <div className="meta">Plan : {bar.plan||"—"} · Expire le {bar.dateExpiration ? formatDateFR(bar.dateExpiration.slice(0,10)) : "—"}</div>
+            <div style={{display:"flex", gap:6, flexWrap:"wrap", marginTop:8}}>
+              <button className="btn" onClick={()=>prolonger(bar,30)}>+30 jours</button>
+              <button className="btn" onClick={()=>prolonger(bar,365)}>+1 an</button>
+              {bar.actif===false
+                ? <button className="btn" onClick={()=>majBar(bar.id,{actif:true})}>Réactiver</button>
+                : <button className="btn danger" onClick={()=>majBar(bar.id,{actif:false})}>Suspendre</button>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* =====================================================================
+   APPLICATION PRINCIPALE
+   ===================================================================== */
+function App({shopId}){
+  const [subscription,setSubscription] = useState(null);
+  const [subLoading,setSubLoading] = useState(true);
+  const [devPanelOpen,setDevPanelOpen] = useState(false);
+
+  // Charge / crée le document d'abonnement du bar (shops/{shopId}) et écoute
+  // ses changements en temps réel (utile si le panneau développeur modifie
+  // le plan depuis un autre appareil pendant que la caisse est ouverte).
+  useEffect(()=>{
+    if(!firebaseOK){ setSubLoading(false); return; }
+    const unsub = shopDocRef().onSnapshot(async (doc)=>{
+      if(doc.exists){
+        setSubscription(doc.data());
+        setSubLoading(false);
+      }else{
+        const dansTrenteJours = new Date(); dansTrenteJours.setDate(dansTrenteJours.getDate()+30);
+        const nouveau = {
+          nomEtablissement: "Burkina Ambiance",
+          plan: "essai",
+          actif: true,
+          dateCreation: new Date().toISOString(),
+          dateExpiration: dansTrenteJours.toISOString(),
+          contactWhatsapp: "22678548317",
+        };
+        await shopDocRef().set(nouveau, {merge:true}).catch(()=>{});
+      }
+    }, err=>{ console.warn("Sync abonnement indisponible :", err.message); setSubLoading(false); });
+    return unsub;
+  },[]);
+
+  const abonnementExpire = subscription && (
+    subscription.actif===false ||
+    (subscription.dateExpiration && new Date(subscription.dateExpiration) < new Date())
+  );
+
+  const [state,setState] = useState(()=>{
+    const ls = loadLS();
+    return {
+      users: ls.users || [
+        // Propriétaire par défaut — PIN 999999 (à changer après premier lancement)
+      ],
+      produits: (ls.produits || PRODUITS_DEFAUT.map(p=>({id:uid(), ...p}))).map(p=>({prixAchat:0, stock:0, seuilAlerte:5, ...p})),
+      stock: ls.stock || {},
+      clotures: ls.clotures || {},
+      avoirs: ls.avoirs || [],
+      ventes: ls.ventes || [],
+      mouvements: ls.mouvements || [],
+    };
+  });
+  const [settings,setSettings] = useState(()=>{
+    const ls = loadLS();
+    return ls.settings || {heureArret:2, nomEtablissement:"Burkina Ambiance", theme:"sombre", fideliteSeuil:10};
+  });
+  const [currentUser,setCurrentUser] = useState(null);
+  const [tab,setTab] = useState("vente");
+  const [online,setOnline] = useState(navigator.onLine);
+  const bootRef = useRef(false);
+
+  // Bootstrap : créer un compte propriétaire par défaut si aucun compte owner n'existe
+  useEffect(()=>{
+    if(bootRef.current) return;
+    bootRef.current = true;
+    if(!state.users.some(u=>u.role==="owner")){
+      hashPin("999999").then(h=>{
+        setState(s=>({...s, users:[...s.users, {id:uid(), nom:"Propriétaire", role:"owner", zone:"toutes", pinHash:h, actif:true}]}));
+      });
+    }
+  },[]);
+
+  useEffect(()=>{
+    const on=()=>setOnline(true), off=()=>setOnline(false);
+    window.addEventListener('online',on); window.addEventListener('offline',off);
+    return ()=>{window.removeEventListener('online',on); window.removeEventListener('offline',off);};
+  },[]);
+
+  // Applique le thème choisi (clair / néon sombre / sombre) sur la page entière
+  useEffect(()=>{
+    document.documentElement.setAttribute('data-theme', settings.theme || 'sombre');
+  },[settings.theme]);
+
+  /* =====================================================================
+     SYNCHRONISATION TEMPS REEL MULTI-APPAREIL
+     Écoute Firestore en continu : dès qu'un appareil écrit une donnée,
+     tous les autres appareils connectés reçoivent la mise à jour ici.
+     Ne fonctionne que si firebaseConfig contient de vrais identifiants
+     (voir en haut du fichier) et que les règles Firestore autorisent
+     la lecture/écriture.
+     ===================================================================== */
+  useEffect(()=>{
+    if(!firebaseOK) return;
+    const unsubs = [];
+
+    unsubs.push(shopCol("users").onSnapshot(snap=>{
+      const users = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      if(users.length) setState(s=>({...s, users}));
+    }, err=>console.warn("Sync utilisateurs indisponible :", err.message)));
+
+    unsubs.push(shopCol("produits").onSnapshot(snap=>{
+      const produits = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      if(produits.length) setState(s=>({...s, produits}));
+    }, err=>console.warn("Sync produits indisponible :", err.message)));
+
+    unsubs.push(shopCol("ventes").onSnapshot(snap=>{
+      const ventes = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      setState(s=>({...s, ventes}));
+    }, err=>console.warn("Sync ventes indisponible :", err.message)));
+
+    unsubs.push(shopCol("avoirs").onSnapshot(snap=>{
+      const avoirs = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      setState(s=>({...s, avoirs}));
+    }, err=>console.warn("Sync avoirs indisponible :", err.message)));
+
+    unsubs.push(shopCol("mouvements").onSnapshot(snap=>{
+      const mouvements = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      setState(s=>({...s, mouvements}));
+    }, err=>console.warn("Sync mouvements indisponible :", err.message)));
+
+    unsubs.push(shopCol("clotures").onSnapshot(snap=>{
+      const clotures = {};
+      snap.docs.forEach(d=>{ clotures[d.id] = d.data(); });
+      setState(s=>({...s, clotures}));
+    }, err=>console.warn("Sync clôtures indisponible :", err.message)));
+
+    unsubs.push(shopCol("stock").onSnapshot(snap=>{
+      setState(s=>{
+        const stock = {...s.stock};
+        snap.docs.forEach(d=>{
+          const data = d.data();
+          if(!data.journee || !data.zone) return;
+          if(!stock[data.journee]) stock[data.journee] = {};
+          stock[data.journee] = {...stock[data.journee], [data.zone]: data.produits || {}};
+        });
+        return {...s, stock};
+      });
+    }, err=>console.warn("Sync stock indisponible :", err.message)));
+
+    unsubs.push(shopCol("settings").doc("global").onSnapshot(doc=>{
+      if(doc.exists) setSettings(s=>({...s, ...doc.data()}));
+    }, err=>console.warn("Sync paramètres indisponible :", err.message)));
+
+    return ()=> unsubs.forEach(u=>u());
+  },[]);
+
+  // Persistance locale à chaque changement d'état
+  useEffect(()=>{ saveLS({...state, settings}); },[state, settings]);
+
+  const patchState = useCallback((mutator)=>{
+    setState(prev=>{
+      const draft = JSON.parse(JSON.stringify(prev));
+      mutator(draft);
+      return draft;
+    });
+  },[]);
+
+  const patchSettings = useCallback((patch)=>{
+    setSettings(prev=>{
+      const nouveau = {...prev, ...patch};
+      queueWrite("settings", "global", nouveau);
+      return nouveau;
+    });
+  },[]);
+
+  const journee = useMemo(()=>journeeComptable(new Date(), settings.heureArret ?? 2), [settings.heureArret]);
+
+  const defaultTab = (role)=> role==="owner" ? "dashboard" : role==="gerant" ? "rapport" : "vente";
+
+  const handleLogin = (pinHash, onFail)=>{
+    const user = state.users.find(u=>u.pinHash===pinHash && u.actif);
+    if(!user){ onFail("PIN incorrect"); return; }
+    setCurrentUser(user);
+    setTab(defaultTab(user.role));
+  };
+
+  const creerProprietaireUrgence = ()=>{
+    return hashPin("999999").then(h=>{
+      const nouveauProprietaire = {id:uid(), nom:"Propriétaire", role:"owner", zone:"toutes", pinHash:h, actif:true};
+      setState(s=>({...s, users:[...s.users, nouveauProprietaire]}));
+      return nouveauProprietaire;
+    });
+  };
+
+  // Abonnement expiré/suspendu : on bloque l'accès à la caisse (sauf via le
+  // panneau développeur, accessible par triple-clic sur le titre + code PIN).
+  if(!subLoading && abonnementExpire && !devPanelOpen){
+    return <AbonnementExpireScreen subscription={subscription} shopId={shopId}
+      onOuvrirDevPanel={()=>setDevPanelOpen(true)} />;
+  }
+
+  if(devPanelOpen){
+    return <DevPanel shopId={shopId} subscription={subscription}
+      onFermer={()=>setDevPanelOpen(false)} />;
+  }
+
+  if(!currentUser){
+    return <LoginScreen onLogin={handleLogin} settings={settings} users={state.users}
+      onCreerProprietaire={creerProprietaireUrgence}
+      onOuvrirDevPanel={()=>setDevPanelOpen(true)}
+      onBypass={(u)=>{ setCurrentUser(u); setTab(defaultTab(u.role)); }} />;
+  }
+
+  const tabsFor = {
+    owner: [
+      {id:"dashboard", label:"KPI", ic:"📊"},
+      {id:"rapport", label:"Ventes", ic:"🧾"},
+      {id:"produits", label:"Produits", ic:"➕"},
+      {id:"admin", label:"Admin", ic:"👑"},
+    ],
+    gerant: [
+      {id:"rapport", label:"Ventes", ic:"🧾"},
+      {id:"stock", label:"Stock", ic:"📦"},
+      {id:"reappro", label:"Réappro", ic:"📥"},
+      {id:"dettes", label:"Dettes", ic:"💳"},
+      {id:"classement", label:"Équipe", ic:"🏆"},
+      {id:"cloture", label:"Arrêt", ic:"🔒"},
+    ],
+    caissier: [
+      {id:"vente", label:"Catalogue", ic:"🛒"},
+      {id:"mesventes", label:"Mes ventes", ic:"📈"},
+      {id:"creances", label:"Créances", ic:"💳"},
+      {id:"avoirs", label:"Avoirs", ic:"📄"},
+    ],
+  };
+  const tabs = tabsFor[currentUser.role] || tabsFor.caissier;
+
+  return (
+    <React.Fragment>
+      <div className="topbar">
+        <div className="who">
+          <b>{currentUser.nom}</b>
+          <span><span className={"pill "+currentUser.role}>{currentUser.role}</span> · {formatDateFR(journee)}</span>
+        </div>
+        <div className="row" style={{gap:8}}>
+          <span className={"badge-sync " + (online?"on":"off")}>{online?"En ligne":"Hors ligne"}</span>
+          <button className="icon-btn" onClick={()=>setCurrentUser(null)} title="Déconnexion">⏻</button>
+        </div>
+      </div>
+
+      <div className="content">
+        {tab==="vente" && currentUser.role==="caissier" && <VenteModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} settings={settings} />}
+        {tab==="mesventes" && currentUser.role==="caissier" && <MesVentesModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} settings={settings} />}
+        {tab==="creances" && currentUser.role==="caissier" && <MesCreancesModule state={state} patchState={patchState} currentUser={currentUser} settings={settings} />}
+        {tab==="avoirs" && <AvoirsModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} settings={settings} />}
+        {tab==="stock" && currentUser.role!=="owner" && <StockModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} />}
+        {tab==="reappro" && currentUser.role==="gerant" && <ReapproModule state={state} patchState={patchState} currentUser={currentUser} />}
+        {tab==="dettes" && currentUser.role==="gerant" && <DettesModule state={state} patchState={patchState} settings={settings} />}
+        {tab==="classement" && currentUser.role==="gerant" && <ClassementModule state={state} settings={settings} />}
+        {tab==="cloture" && currentUser.role==="gerant" && <ClotureModule state={state} patchState={patchState} currentUser={currentUser} journee={journee} />}
+        {tab==="rapport" && (currentUser.role==="gerant" || currentUser.role==="owner") && <VentesModule state={state} patchState={patchState} journee={journee} />}
+        {tab==="dashboard" && currentUser.role==="owner" && <DashboardModule state={state} journee={journee} />}
+        {tab==="produits" && currentUser.role==="owner" && <ProduitsModule state={state} patchState={patchState} />}
+        {tab==="admin" && currentUser.role==="owner" && <OwnerModule state={state} patchState={patchState} settings={settings} patchSettings={patchSettings} currentUser={currentUser} journee={journee} shopId={shopId} subscription={subscription} />}
+      </div>
+
+      <div className="tabbar">
+        {tabs.map(t=>(
+          <button key={t.id} className={"tab " + (tab===t.id?"active":"")} onClick={()=>setTab(t.id)}>
+            <span className="ic">{t.ic}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </React.Fragment>
+  );
+}
+
+/* Racine : détermine d'abord à quel bar (shopId) cet appareil appartient
+   avant de monter l'application principale. */
+function Root(){
+  const [shopId,setShopId] = useState(()=>localStorage.getItem(DEVICE_SHOP_KEY) || null);
+  useEffect(()=>{ if(shopId) setShopIdActif(shopId); },[shopId]);
+  if(!shopId){
+    return <ShopSetupScreen onResolu={(id)=>setShopId(id)} />;
+  }
+  return <App key={shopId} shopId={shopId} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root/>);
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(e=>console.warn("Service worker non enregistré :", e));
+  });
+}
+</script>
+</body>
+</html>
